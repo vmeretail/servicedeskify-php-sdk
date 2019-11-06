@@ -1,0 +1,9 @@
+{
+    "name": "vmeretail/servicedeskify-php-sdk",
+    "description": "The ServiceDeskify helpdesk PHP library provides convienient access to VmeRetail's ServiceDeskify api from apps written in PHP. It includes a pre-defined set of classes for API resources.",
+    "type": "library",
+    "minimum-stability": "dev",
+    "require": {
+        "guzzlehttp/guzzle": "^6.5@dev"
+    }
+}
