@@ -29,6 +29,12 @@ And be able to make API calls:
 $serviceDeskifyResponseObject = $incidentsApi->create([ //...properties ]);
 ```
 
+Then you are able to get the body of the response as a JSON object:
+
+```
+$serviceDeskifyResponseObject->getBodyAsJson();
+```
+
 ### Reference API
 
 Details about the properties that are to be passed in and responses can be found (https://test.helpdesk.vme.co/docs/)
