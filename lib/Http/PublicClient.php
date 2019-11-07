@@ -1,11 +1,33 @@
 <?php
 
-namespace VmeRetail\ServiceDeskify;
+namespace VmeRetail\ServiceDeskify\Http;
 
-use VmeRetail\ServiceDeskify\ServiceDeskifyClient\AuthenticatedClientSingleton;
+use GuzzleHttp\Client;
+use VmeRetail\ServiceDeskify\ServiceDeskifyConstants;
 
-class PublicClient extends AbstractServiceDeskifyClient
+class PublicClient
 {
+    /**
+     * @var Client
+     */
+    public $http;
+
+    /**
+     * @var string
+     */
+    public $baseUrl;
+
+    public function __construct(){
+        $this->http = new Client();
+        $this->baseUrl = ServiceDeskifyConstants::HELPDESK_API_URL;
+    }
+
+    public function setBaseUrl(string $url)
+    {
+        $this->baseUrl = $url;
+        return $this;
+    }
+
     /**
      * @param $username
      * @param $password

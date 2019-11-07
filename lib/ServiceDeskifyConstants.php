@@ -1,7 +1,6 @@
 <?php
 
-namespace VmeRetail\ServiceDeskify\HelpdeskClient;
-
+namespace VmeRetail\ServiceDeskify;
 
 final class ServiceDeskifyConstants
 {

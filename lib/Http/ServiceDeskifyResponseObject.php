@@ -1,6 +1,6 @@
 <?php
 
-namespace VmeRetail\ServiceDeskify;
+namespace VmeRetail\ServiceDeskify\Http;
 
 
 use Psr\Http\Message\ResponseInterface;
@@ -26,19 +26,20 @@ class ServiceDeskifyResponseObject implements ResponseInterface
 
     public function withStatus($code, $reasonPhrase = '')
     {
-        // TODO: Implement withStatus() method.
+
     }
 
     public function getReasonPhrase()
     {
-        // TODO: Implement getReasonPhrase() method.
+        $this->response->getReasonPhrase();
     }
 
     public function getBody()
     {
-        // TODO: Implement getBody() method.
+
     }
 
+    // TODO Very Important
     public function getBodyAsJson()
     {
 
@@ -49,24 +50,27 @@ class ServiceDeskifyResponseObject implements ResponseInterface
 
     }
 
+    // TODO Very Important
     public function isErrorResponse()
     {
 
     }
 
+    // TODO Very Important
     public function getError()
     {
 
     }
 
+    //
     public function withProtocolVersion($version)
     {
-        // TODO: Implement withProtocolVersion() method.
+
     }
 
     public function getHeaders()
     {
-        // TODO: Implement getHeaders() method.
+        return $this->response->getHeaders();
     }
 
     public function hasHeader($name)

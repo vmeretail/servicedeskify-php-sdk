@@ -2,8 +2,11 @@
 
 namespace VmeRetail\ServiceDeskify;
 
-use VmeRetail\ServiceDeskify\HelpdeskClient\AbstractApiResource;
-
+/**
+ * Class Incidents
+ * @package VmeRetail\ServiceDeskify
+ * https://test.helpdesk.vme.co/docs/#incidents
+ */
 class Incidents extends AbstractApiResource
 {
     public function  resource()

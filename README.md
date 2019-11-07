@@ -6,13 +6,14 @@ The ServiceDeskify helpdesk PHP library provides convienient access to VmeRetail
 
 ### Dependencies
 
+
 ### Getting Started
 
 Create an authenticated client first through in order to get access to the API exposed by ServiceDeskify.
 
 ```
-(new \VmeRetail\ServiceDeskify\PublicClient())
-->setBaseUrl(\VmeRetail\ServiceDeskify\HelpdeskClient\ServiceDeskifyConstants::HELPDESK_API_URL_TEST)
+(new \VmeRetail\ServiceDeskify\Http\PublicClient())
+->setBaseUrl(\VmeRetail\ServiceDeskify\ServiceDeskifyConstants::HELPDESK_API_URL_TEST)
 ->authenticate('example@vmeretail.com', 'password', '2', 'client_secret_SNo1LKmrXdUTdjTdb1bC4eZ6l');
 ```
 
@@ -27,3 +28,7 @@ And be able to make API calls:
 ```
 $serviceDeskifyResponseObject = $incidentsApi->create([ //...properties ]);
 ```
+
+### Reference API
+
+Details about the properties that are to be passed in and responses can be found (https://test.helpdesk.vme.co/docs/)
