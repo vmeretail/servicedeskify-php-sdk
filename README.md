@@ -4,12 +4,31 @@ The ServiceDeskify helpdesk PHP library provides convienient access to VmeRetail
 
 ### Composer
 
+We recommend installing this library via composer;
+
+```
+composer require vmeretail/servicedeskify-php-sdk
+```
+
+Along with composer's autoloader:
+
+```
+require 'vendor/autoload.php';
+```
+
+You can later pull the latest changes.
+
+```
+composer update
+```
+
 ### Dependencies
 
+[guzzlehttp/guzzle](https://packagist.org/packages/guzzlehttp/guzzle)
 
 ### Getting Started
 
-Create an authenticated client first through in order to get access to the API exposed by ServiceDeskify.
+Create an authenticated client first in order to get access to the API exposed by ServiceDeskify. The credentials and keys are provided by VmeRetail.
 
 ```
 (new \VmeRetail\ServiceDeskify\Http\PublicClient())
