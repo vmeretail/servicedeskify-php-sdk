@@ -26,7 +26,7 @@ class ServiceDeskifyResponseObject implements ResponseInterface
 
     public function withStatus($code, $reasonPhrase = '')
     {
-
+        $this->response->withStatus($code, $reasonPhrase);
     }
 
     public function getReasonPhrase()
@@ -36,36 +36,33 @@ class ServiceDeskifyResponseObject implements ResponseInterface
 
     public function getBody()
     {
-
+        return $this->response->getBody()->getContents();
     }
 
-    // TODO Very Important
     public function getBodyAsJson()
     {
-
+        return json_encode($this->response->getBody()->getContents());
     }
 
     public function getProtocolVersion()
     {
-
+        return $this->response->getProtocolVersion();
     }
 
-    // TODO Very Important
     public function isErrorResponse()
     {
-
+        $status = $this->response->getStatusCode();
+        return $status >= 400;
     }
 
-    // TODO Very Important
     public function getError()
     {
-
+        return $this->isErrorResponse() ? $this->getBody() : null;
     }
 
-    //
     public function withProtocolVersion($version)
     {
-
+        return $this->response->withProtocolVersion();
     }
 
     public function getHeaders()
@@ -75,36 +72,36 @@ class ServiceDeskifyResponseObject implements ResponseInterface
 
     public function hasHeader($name)
     {
-        // TODO: Implement hasHeader() method.
+        $this->response->hasHeader();
     }
 
     public function getHeader($name)
     {
-        // TODO: Implement getHeader() method.
+        $this->response->getHeader();
     }
 
     public function getHeaderLine($name)
     {
-        // TODO: Implement getHeaderLine() method.
+        $this->response->getHeaderLine();
     }
 
     public function withHeader($name, $value)
     {
-        // TODO: Implement withHeader() method.
+        $this->response->withHeader();
     }
 
     public function withAddedHeader($name, $value)
     {
-        // TODO: Implement withAddedHeader() method.
+        $this->response->withAddedHeader();
     }
 
     public function withoutHeader($name)
     {
-        // TODO: Implement withoutHeader() method.
+        $this->response->withoutHeader();
     }
 
     public function withBody(StreamInterface $body)
     {
-        // TODO: Implement withBody() method.
+        $this->response->withBody();
     }
 }
