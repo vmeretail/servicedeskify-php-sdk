@@ -1,11 +1,11 @@
 <?php
 
-namespace VmeRetail\ServiceDeskify\HelpdeskClient;
+namespace VmeRetail\ServiceDeskify;
 
 
 use GuzzleHttp\Psr7\Response;
-use VmeRetail\ServiceDeskify\ServiceDeskifyClient\AuthenticatedClientSingleton;
-use VmeRetail\ServiceDeskify\ServiceDeskifyResponseObject;
+use VmeRetail\ServiceDeskify\Http\AuthenticatedClientSingleton;
+use VmeRetail\ServiceDeskify\Http\ServiceDeskifyResponseObject;
 
 abstract class AbstractApiResource
 {
@@ -25,10 +25,14 @@ abstract class AbstractApiResource
             // todo throw an exception because no one is authenticated yet
             throw new \Exception('');
         }
-
         $this->authenticated = AuthenticatedClientSingleton::instance();
     }
 
+    /**
+     * @param array $query
+     * @return ServiceDeskifyResponseObject
+     * Http Method GET
+     */
     public function all(array $query)
     {
         $response = $this->lastResponse = $this->authenticated->http->get($this->url(), [
@@ -39,28 +43,49 @@ abstract class AbstractApiResource
         return (new ServiceDeskifyResponseObject($response));
     }
 
+    /**
+     * @param array $query
+     * @return ServiceDeskifyResponseObject
+     * Http Method GET
+     */
     public function retrieve()
     {
 
     }
 
+    /**
+     * @param array $properties
+     * @return ServiceDeskifyResponseObject
+     * Http Method POST
+     */
     public function create(array $properties)
     {
         $response = $this->authenticated->http->post($this->url(), [
             'headers' => array_merge(
                 $this->authenticated->headers(),
                 [ 'Content-Type' => 'application/json']
-            )
+            ),
+            'json' => $properties
         ]);
 
         return (new ServiceDeskifyResponseObject($response));
     }
 
+    /**
+     * @param array $query
+     * @return ServiceDeskifyResponseObject
+     * Http Method PUT
+     */
     public function update()
     {
 
     }
 
+    /**
+     * @param array $query
+     * @return ServiceDeskifyResponseObject
+     * Http Method DELETE
+     */
     public function destroy()
     {
 

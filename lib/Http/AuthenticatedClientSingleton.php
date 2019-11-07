@@ -1,6 +1,6 @@
 <?php
 
-namespace VmeRetail\ServiceDeskify\ServiceDeskifyClient;
+namespace VmeRetail\ServiceDeskify\Http;
 
 use GuzzleHttp\Client;
 
