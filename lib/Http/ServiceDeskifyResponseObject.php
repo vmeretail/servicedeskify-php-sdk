@@ -39,6 +39,11 @@ class ServiceDeskifyResponseObject implements ResponseInterface
         return $this->response->getBody()->getContents();
     }
 
+    public function getDecodedBody()
+    {
+        return json_decode($this->getBody());
+    }
+
     public function getBodyAsJson()
     {
         return json_encode($this->response->getBody()->getContents());
