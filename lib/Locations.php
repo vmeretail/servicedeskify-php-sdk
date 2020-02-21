@@ -2,9 +2,10 @@
 
 namespace VmeRetail\ServiceDeskify;
 
-
-use VmeRetail\ServiceDeskify\HelpdeskClient\AbstractApiResource;
-
+/**
+ * Class Locations
+ * @package VmeRetail\ServiceDeskify
+ */
 class Locations extends AbstractApiResource
 {
     public function resource()

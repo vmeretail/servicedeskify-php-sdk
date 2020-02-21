@@ -2,8 +2,6 @@
 
 namespace VmeRetail\ServiceDeskify;
 
-use VmeRetail\ServiceDeskify\AbstractApiResource;
-
 /**
  * Class IncidentPosts
  * @package VmeRetail\ServiceDeskify
