@@ -3,11 +3,10 @@
 namespace VmeRetail\ServiceDeskify;
 
 /**
- * Class IncidentPosts
+ * Class IncidentClose
  * @package VmeRetail\ServiceDeskify
- * https://test.helpdesk.vme.co/docs/#retrieve-an-incidents-posts
  */
-class IncidentPosts extends AbstractApiResource
+class IncidentClose extends AbstractApiResource
 {
     public $incidentId;
 
@@ -20,7 +19,7 @@ class IncidentPosts extends AbstractApiResource
 
     public function resource()
     {
-        return 'incidents.posts';
+        return 'incidents.close';
     }
 
     public function incidents()

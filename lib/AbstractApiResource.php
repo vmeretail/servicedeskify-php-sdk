@@ -101,10 +101,10 @@ abstract class AbstractApiResource
             // e.g. /api/incidents/{}/posts
             // this could be
             $resource = $nested[0];
-            return '/api/' . $nested[0] . '/' . $this->{$resource}() . '/' . $nested[1];
+            return $this->authenticated->baseUrl . '/api/' . $nested[0] . '/' . $this->{$resource}() . '/' . $nested[1];
         }
 
-        return  $this->authenticated->baseUrl  . '/api/' . $this->resource();
+        return  $this->authenticated->baseUrl . '/api/' . $this->resource();
     }
 
     public abstract function resource();
