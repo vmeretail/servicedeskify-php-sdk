@@ -4,7 +4,7 @@ namespace VmeRetail\ServiceDeskify;
 
 final class ServiceDeskifyConstants
 {
-    const HELPDESK_API_URL_TEST = 'https://test.helpdesk.vme.co';
+    const HELPDESK_API_URL_TEST = 'https://helpdesk-test.vme.co';
     const HELPDESK_API_URL = 'https://helpdesk.vme.co';
 
     const PRIORITY_LOW = 'Low';
