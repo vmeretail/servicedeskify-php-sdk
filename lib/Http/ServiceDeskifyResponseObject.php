@@ -3,6 +3,7 @@
 namespace VmeRetail\ServiceDeskify\Http;
 
 
+use Psr\Http\Message\MessageInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\StreamInterface;
 
@@ -19,29 +20,29 @@ class ServiceDeskifyResponseObject implements ResponseInterface
         $this->response = $response;
     }
 
-    public function getStatusCode()
+    public function getStatusCode(): int
     {
         return $this->response->getStatusCode();
     }
 
-    public function withStatus($code, $reasonPhrase = '')
+    public function withStatus(int $code, string $reasonPhrase = ''): ResponseInterface
     {
-        $this->response->withStatus($code, $reasonPhrase);
+        return $this->response->withStatus($code, $reasonPhrase);
     }
 
-    public function getReasonPhrase()
+    public function getReasonPhrase(): string
     {
-        $this->response->getReasonPhrase();
+        return $this->response->getReasonPhrase();
     }
 
-    public function getBody()
+    public function getBody(): StreamInterface
     {
-        return $this->response->getBody()->getContents();
+        return $this->response->getBody();
     }
 
     public function getDecodedBody()
     {
-        return json_decode($this->getBody());
+        return json_decode($this->getBody()->getContents());
     }
 
     public function getBodyAsJson()
@@ -49,7 +50,7 @@ class ServiceDeskifyResponseObject implements ResponseInterface
         return json_encode($this->response->getBody()->getContents());
     }
 
-    public function getProtocolVersion()
+    public function getProtocolVersion(): string
     {
         return $this->response->getProtocolVersion();
     }
@@ -65,48 +66,48 @@ class ServiceDeskifyResponseObject implements ResponseInterface
         return $this->isErrorResponse() ? $this->getBody() : null;
     }
 
-    public function withProtocolVersion($version)
+    public function withProtocolVersion(string $version): MessageInterface
     {
-        return $this->response->withProtocolVersion();
+        return $this->response->withProtocolVersion($version);
     }
 
-    public function getHeaders()
+    public function getHeaders(): array
     {
         return $this->response->getHeaders();
     }
 
-    public function hasHeader($name)
+    public function hasHeader(string $name): bool
     {
-        $this->response->hasHeader();
+        return $this->response->hasHeader($name);
     }
 
-    public function getHeader($name)
+    public function getHeader(string $name): array
     {
-        $this->response->getHeader();
+        return $this->response->getHeader($name);
     }
 
-    public function getHeaderLine($name)
+    public function getHeaderLine(string $name): string
     {
-        $this->response->getHeaderLine();
+        return $this->response->getHeaderLine($name);
     }
 
-    public function withHeader($name, $value)
+    public function withHeader(string $name, $value): MessageInterface
     {
-        $this->response->withHeader();
+        return $this->response->withHeader($name, $value);
     }
 
-    public function withAddedHeader($name, $value)
+    public function withAddedHeader(string $name, $value): MessageInterface
     {
-        $this->response->withAddedHeader();
+        return $this->response->withAddedHeader($name, $value);
     }
 
-    public function withoutHeader($name)
+    public function withoutHeader(string $name): MessageInterface
     {
-        $this->response->withoutHeader();
+        return $this->response->withoutHeader($name);
     }
 
-    public function withBody(StreamInterface $body)
+    public function withBody(StreamInterface $body): MessageInterface
     {
-        $this->response->withBody();
+        return $this->response->withBody($body);
     }
 }
