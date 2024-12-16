@@ -48,9 +48,13 @@ abstract class AbstractApiResource
      * @return ServiceDeskifyResponseObject
      * Http Method GET
      */
-    public function retrieve()
+    public function retrieve(int $id)
     {
+        $response = $this->lastResponse = $this->authenticated->http->get($this->url()."/$id", [
+            'headers' => $this->authenticated->headers()
+        ]);
 
+        return (new ServiceDeskifyResponseObject($response));
     }
 
     /**
