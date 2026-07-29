@@ -55,6 +55,7 @@ final class TokenManager
                 try {
                     return $this->store($this->requestToken(
                         new RefreshTokenRequest($this->credentials, $cached->refreshToken),
+                        existingRefreshToken: $cached->refreshToken,
                     ));
                 } catch (AuthenticationException) {
                     $this->forget();
@@ -72,8 +73,10 @@ final class TokenManager
         $this->repository()->forget($this->resolvedCacheKey());
     }
 
-    private function requestToken(Request $request): OAuthToken
-    {
+    private function requestToken(
+        Request $request,
+        ?string $existingRefreshToken = null,
+    ): OAuthToken {
         $this->credentials->ensureComplete();
 
         try {
@@ -100,19 +103,22 @@ final class TokenManager
                 status: $mapped->status,
                 responseBody: $mapped->responseBody === null
                     ? null
-                    : $this->redact($mapped->responseBody),
+                    : $this->redactOAuthResponse($mapped->responseBody),
                 errors: $errors,
             );
         }
 
         $data = $this->responseData($response);
-        $token = OAuthToken::fromTokenResponse($data);
+        $token = OAuthToken::fromTokenResponse(
+            $data,
+            existingRefreshToken: $existingRefreshToken,
+        );
 
         if ($token->accessToken === '' || $token->expiresAt <= time()) {
             throw new AuthenticationException(
                 message: 'ServiceDeskify returned an invalid OAuth token response.',
                 status: $response->status(),
-                responseBody: $this->redact($response->body()),
+                responseBody: $this->redactOAuthResponse($response->body()),
             );
         }
 
@@ -130,7 +136,7 @@ final class TokenManager
             throw new AuthenticationException(
                 message: 'ServiceDeskify returned an invalid OAuth response.',
                 status: $response->status(),
-                responseBody: $this->redact($response->body()),
+                responseBody: $this->redactOAuthResponse($response->body()),
                 previous: $exception,
             );
         }
@@ -139,7 +145,7 @@ final class TokenManager
             throw new AuthenticationException(
                 message: 'ServiceDeskify returned an invalid OAuth response.',
                 status: $response->status(),
-                responseBody: $this->redact($response->body()),
+                responseBody: $this->redactOAuthResponse($response->body()),
             );
         }
 
@@ -155,6 +161,55 @@ final class TokenManager
         }
 
         return $value;
+    }
+
+    private function redactOAuthResponse(string $body): string
+    {
+        try {
+            $data = json_decode($body, true, 512, JSON_THROW_ON_ERROR);
+        } catch (JsonException) {
+            return $this->redact($body);
+        }
+
+        if (! is_array($data)) {
+            return $this->redact($body);
+        }
+
+        $data = $this->redactTokenFields($data);
+
+        try {
+            return $this->redact(json_encode(
+                $data,
+                JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE,
+            ));
+        } catch (JsonException) {
+            return 'ServiceDeskify returned an OAuth response containing redacted credentials.';
+        }
+    }
+
+    /**
+     * @param  array<array-key, mixed>  $data
+     * @return array<array-key, mixed>
+     */
+    private function redactTokenFields(array $data): array
+    {
+        foreach ($data as $key => $value) {
+            $normalizedKey = is_string($key)
+                ? strtolower(str_replace(['_', '-'], '', $key))
+                : '';
+
+            if (in_array($normalizedKey, ['accesstoken', 'refreshtoken', 'idtoken'], true)) {
+                unset($data[$key]);
+
+                continue;
+            }
+
+            if (is_array($value)) {
+                $data[$key] = $this->redactTokenFields($value);
+            }
+        }
+
+        return $data;
     }
 
     private function load(): ?OAuthToken

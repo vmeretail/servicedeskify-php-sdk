@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Carbon\CarbonImmutable;
+use GuzzleHttp\Psr7\Utils;
 use Illuminate\Http\UploadedFile;
 use Saloon\Data\MultipartValue;
 use Saloon\Enums\Method;
@@ -12,6 +13,8 @@ use Saloon\Http\Request;
 use Saloon\Http\Response;
 use Saloon\Repositories\Body\JsonBodyRepository;
 use Saloon\Repositories\Body\MultipartBodyRepository;
+use Tests\Support\ShortWriteStreamWrapper;
+use VmeRetail\ServiceDeskify\Data\AttachmentDownload;
 use VmeRetail\ServiceDeskify\Data\CreateIncidentData;
 use VmeRetail\ServiceDeskify\Data\CreateIncidentPostData;
 use VmeRetail\ServiceDeskify\Data\CreateSoftwareAssetReleaseData;
@@ -354,6 +357,78 @@ it('rewinds multipart attachments before a request is retried', function (): voi
     $request->prepareForRetry();
 
     expect(ftell($attachment->value))->toBe(0);
+});
+
+it('strips path components from downloaded attachment filenames', function (
+    string $contentDisposition,
+    string $expectedFileName,
+): void {
+    MockClient::global([
+        tokenResponse(),
+        MockResponse::make('attachment', 200, [
+            'Content-Disposition' => $contentDisposition,
+        ]),
+    ]);
+
+    $download = ServiceDeskify::incidents()->posts(10)->download(20, 70);
+
+    expect($download->fileName)->toBe($expectedFileName);
+})->with([
+    'encoded unix path' => [
+        "attachment; filename*=UTF-8''..%2F..%2Fconfig.php",
+        'config.php',
+    ],
+    'windows path' => [
+        'attachment; filename="..\\..\\config.php"',
+        'config.php',
+    ],
+    'directory only' => [
+        "attachment; filename*=UTF-8''..%2F..%2F",
+        'attachment-70',
+    ],
+]);
+
+it('continues writing until a complete attachment chunk is saved', function (): void {
+    $scheme = 'servicedeskify-short-write';
+    $path = "{$scheme}://attachment";
+
+    stream_wrapper_register($scheme, ShortWriteStreamWrapper::class);
+    ShortWriteStreamWrapper::reset(maximumWriteSize: 2);
+
+    try {
+        $download = new AttachmentDownload(
+            fileName: 'attachment.txt',
+            contentType: 'text/plain',
+            stream: Utils::streamFor('complete attachment'),
+        );
+
+        $download->saveTo($path);
+
+        expect(ShortWriteStreamWrapper::contents($path))->toBe('complete attachment');
+    } finally {
+        stream_wrapper_unregister($scheme);
+    }
+});
+
+it('fails when saving an attachment makes no write progress', function (): void {
+    $scheme = 'servicedeskify-zero-write';
+    $path = "{$scheme}://attachment";
+
+    stream_wrapper_register($scheme, ShortWriteStreamWrapper::class);
+    ShortWriteStreamWrapper::reset(maximumWriteSize: 0);
+
+    try {
+        $download = new AttachmentDownload(
+            fileName: 'attachment.txt',
+            contentType: 'text/plain',
+            stream: Utils::streamFor('attachment'),
+        );
+
+        expect(fn () => $download->saveTo($path))
+            ->toThrow(RuntimeException::class, 'Unable to write attachment');
+    } finally {
+        stream_wrapper_unregister($scheme);
+    }
 });
 
 function tokenResponse(): MockResponse

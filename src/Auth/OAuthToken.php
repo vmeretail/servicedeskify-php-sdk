@@ -16,11 +16,18 @@ final readonly class OAuthToken
     /**
      * @param  array<string, mixed>  $data
      */
-    public static function fromTokenResponse(array $data, ?int $now = null): self
-    {
+    public static function fromTokenResponse(
+        array $data,
+        ?int $now = null,
+        ?string $existingRefreshToken = null,
+    ): self {
+        $refreshToken = $data['refresh_token'] ?? null;
+
         return new self(
             accessToken: (string) ($data['access_token'] ?? ''),
-            refreshToken: isset($data['refresh_token']) ? (string) $data['refresh_token'] : null,
+            refreshToken: is_string($refreshToken) && $refreshToken !== ''
+                ? $refreshToken
+                : $existingRefreshToken,
             tokenType: (string) ($data['token_type'] ?? 'Bearer'),
             expiresAt: ($now ?? time()) + max(0, (int) ($data['expires_in'] ?? 0)),
         );

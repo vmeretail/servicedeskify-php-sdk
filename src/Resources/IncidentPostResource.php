@@ -70,14 +70,26 @@ final readonly class IncidentPostResource
         $value = $this->headerValue($header);
 
         if ($value !== null && preg_match("/filename\\*=UTF-8''([^;]+)/i", $value, $matches) === 1) {
-            return rawurldecode($matches[1]);
+            return $this->sanitizeFileName(rawurldecode($matches[1]), $attachmentId);
         }
 
         if ($value !== null && preg_match('/filename=\"?([^\";]+)\"?/i', $value, $matches) === 1) {
-            return trim($matches[1]);
+            return $this->sanitizeFileName($matches[1], $attachmentId);
         }
 
         return "attachment-{$attachmentId}";
+    }
+
+    private function sanitizeFileName(string $fileName, int $attachmentId): string
+    {
+        $fileName = str_replace('\\', '/', $fileName);
+        $fileName = basename($fileName);
+        $fileName = preg_replace('/[\x00-\x1F\x7F]/', '', $fileName) ?? '';
+        $fileName = trim($fileName);
+
+        return $fileName === '' || $fileName === '.' || $fileName === '..'
+            ? "attachment-{$attachmentId}"
+            : $fileName;
     }
 
     /**

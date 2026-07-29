@@ -128,6 +128,40 @@ it('refreshes an expired token and retains a replacement refresh token', functio
     });
 });
 
+it('preserves a refresh token when the oauth server does not rotate it', function (): void {
+    $mock = MockClient::global([
+        oauthResponse('expiring-access', 'refresh-one', expiresIn: 30),
+        MockResponse::make([
+            'access_token' => 'fresh-access-one',
+            'token_type' => 'Bearer',
+            'expires_in' => 30,
+        ]),
+        MockResponse::make([
+            'access_token' => 'fresh-access-two',
+            'token_type' => 'Bearer',
+            'expires_in' => 3600,
+        ]),
+    ]);
+
+    $tokens = app(TokenManager::class);
+
+    expect($tokens->token()->refreshToken)->toBe('refresh-one')
+        ->and($tokens->token()->refreshToken)->toBe('refresh-one')
+        ->and($tokens->token()->refreshToken)->toBe('refresh-one');
+
+    $mock->assertSentCount(1, PasswordGrantRequest::class);
+    $mock->assertSentCount(2, RefreshTokenRequest::class);
+    $mock->assertSent(function ($request, Response $response): bool {
+        if (! $request instanceof RefreshTokenRequest) {
+            return false;
+        }
+
+        $body = $response->getPendingRequest()->body()?->all();
+
+        return is_array($body) && $body['refresh_token'] === 'refresh-one';
+    });
+});
+
 it('invalidates and reauthenticates once after an api 401', function (): void {
     $mock = MockClient::global([
         MockResponse::make([
@@ -242,6 +276,39 @@ it('maps invalid oauth responses into an authentication exception', function (st
     'malformed json' => ['not-json'],
     'scalar json' => ['null'],
 ]);
+
+it('redacts bearer credentials from invalid oauth token responses', function (): void {
+    MockClient::global([
+        MockResponse::make([
+            'access_token' => 'secret-access-token',
+            'refresh_token' => 'secret-refresh-token',
+            'id_token' => 'secret-id-token',
+            'token_type' => 'Bearer',
+            'expires_in' => 0,
+        ]),
+    ]);
+
+    try {
+        app(TokenManager::class)->token();
+        test()->fail('An authentication exception was not thrown.');
+    } catch (AuthenticationException $exception) {
+        $responseBody = json_decode(
+            (string) $exception->responseBody,
+            true,
+            flags: JSON_THROW_ON_ERROR,
+        );
+
+        expect($exception->responseBody)
+            ->not->toContain('secret-access-token')
+            ->not->toContain('secret-refresh-token')
+            ->not->toContain('secret-id-token')
+            ->and($responseBody)->not->toHaveKeys([
+                'access_token',
+                'refresh_token',
+                'id_token',
+            ]);
+    }
+});
 
 it('maps scalar json api failures into the documented exception hierarchy', function (): void {
     MockClient::global([

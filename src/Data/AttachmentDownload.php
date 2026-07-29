@@ -31,8 +31,17 @@ final readonly class AttachmentDownload
             while (! $this->stream->eof()) {
                 $chunk = $this->stream->read(8192);
 
-                if ($chunk !== '' && fwrite($destination, $chunk) === false) {
-                    throw new RuntimeException("Unable to write attachment to [{$path}].");
+                $offset = 0;
+                $length = strlen($chunk);
+
+                while ($offset < $length) {
+                    $written = fwrite($destination, substr($chunk, $offset));
+
+                    if ($written === false || $written === 0) {
+                        throw new RuntimeException("Unable to write attachment to [{$path}].");
+                    }
+
+                    $offset += $written;
                 }
             }
         } finally {
