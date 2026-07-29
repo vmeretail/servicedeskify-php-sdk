@@ -97,8 +97,9 @@ Paginated methods return `PaginatedData` with typed `items` and the usual page,
 total, link and range values. A page can also be iterated directly or passed to
 `count()`.
 
-To process every incident without hand-rolling the service's fixed 50-item page
-loop, use `lazy()` or `each()`:
+To process every result without hand-rolling page loops, incidents, posts and
+locations expose `lazy()` and `each()`. Returning `false` from an `each()`
+callback stops iteration early.
 
 ```php
 foreach (ServiceDeskify::incidents()->lazy() as $incident) {
@@ -182,10 +183,12 @@ Failed responses are mapped to package exceptions:
 - `AuthenticationException` for `401` and `403`
 - `NotFoundException` for `404`
 - `ValidationException` for `422`
+- `UnexpectedResponseException` when a successful response is missing required identity fields
 - `ServiceDeskifyRequestException` for other API and transport failures
 
 Exceptions expose the HTTP status, response body and validation errors where
-available. Credentials are never included in exception messages.
+available. All exceptions above extend `ServiceDeskifyRequestException`.
+Credentials are never included in exception messages.
 
 ## Testing consuming applications
 

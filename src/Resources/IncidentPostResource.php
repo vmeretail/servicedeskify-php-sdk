@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace VmeRetail\ServiceDeskify\Resources;
 
+use Generator;
 use VmeRetail\ServiceDeskify\Data\AttachmentDownload;
 use VmeRetail\ServiceDeskify\Data\CreateIncidentPostData;
 use VmeRetail\ServiceDeskify\Data\IncidentPostData;
@@ -37,6 +38,45 @@ final readonly class IncidentPostResource
         return PaginatedData::fromArray($payload, IncidentPostData::fromArray(...));
     }
 
+    /**
+     * Lazily retrieve posts from the requested page through to the final page.
+     *
+     * @return Generator<int, IncidentPostData>
+     */
+    public function lazy(?IncidentPostQueryData $query = null): Generator
+    {
+        $query ??= new IncidentPostQueryData;
+        $page = max(1, $query->page);
+
+        do {
+            $posts = $this->all($query->withPage($page));
+
+            if ($posts->items === []) {
+                return;
+            }
+
+            foreach ($posts as $post) {
+                yield $post;
+            }
+
+            $page++;
+        } while ($page <= $posts->lastPage);
+    }
+
+    /**
+     * Iterate lazily, stopping early when the callback returns false.
+     *
+     * @param  callable(IncidentPostData): mixed  $callback
+     */
+    public function each(callable $callback, ?IncidentPostQueryData $query = null): void
+    {
+        foreach ($this->lazy($query) as $post) {
+            if ($callback($post) === false) {
+                return;
+            }
+        }
+    }
+
     public function create(CreateIncidentPostData $data): IncidentPostData
     {
         $response = $this->client->send(new CreateIncidentPostRequest($this->incidentId, $data));
@@ -47,16 +87,16 @@ final readonly class IncidentPostResource
         return IncidentPostData::fromArray($payload);
     }
 
-    public function download(int $postId, int $attachmentId): AttachmentDownload
+    public function download(int|string $postId, int|string $attachmentId): AttachmentDownload
     {
         $response = $this->client->send(new DownloadIncidentAttachmentRequest(
             $this->incidentId,
-            $postId,
-            $attachmentId,
+            (int) $postId,
+            (int) $attachmentId,
         ));
 
         return new AttachmentDownload(
-            fileName: $this->fileName($response->header('Content-Disposition'), $attachmentId),
+            fileName: $this->fileName($response->header('Content-Disposition'), (int) $attachmentId),
             contentType: $this->headerValue($response->header('Content-Type')) ?? 'application/octet-stream',
             stream: $response->stream(),
         );

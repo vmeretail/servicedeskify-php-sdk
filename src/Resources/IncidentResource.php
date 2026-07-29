@@ -47,20 +47,23 @@ final readonly class IncidentResource
         $page = max(1, $query->page);
 
         do {
-            $incidents = $this->all(new IncidentQueryData(
-                page: $page,
-                status: $query->status,
-            ));
+            $incidents = $this->all($query->withPage($page));
+
+            if ($incidents->items === []) {
+                return;
+            }
 
             foreach ($incidents as $incident) {
                 yield $incident;
             }
 
-            $page = $incidents->currentPage + 1;
-        } while ($incidents->currentPage < $incidents->lastPage);
+            $page++;
+        } while ($page <= $incidents->lastPage);
     }
 
     /**
+     * Iterate lazily, stopping early when the callback returns false.
+     *
      * @param  callable(IncidentData): mixed  $callback
      */
     public function each(callable $callback, ?IncidentQueryData $query = null): void
@@ -72,9 +75,9 @@ final readonly class IncidentResource
         }
     }
 
-    public function find(int $incidentId): IncidentData
+    public function find(int|string $incidentId): IncidentData
     {
-        $response = $this->client->send(new GetIncidentRequest($incidentId));
+        $response = $this->client->send(new GetIncidentRequest((int) $incidentId));
 
         /** @var array<string, mixed> $data */
         $data = $response->json('data', []);
@@ -92,18 +95,18 @@ final readonly class IncidentResource
         return IncidentData::fromArray($payload);
     }
 
-    public function close(int $incidentId): void
+    public function close(int|string $incidentId): void
     {
-        $this->client->send(new CloseIncidentRequest($incidentId));
+        $this->client->send(new CloseIncidentRequest((int) $incidentId));
     }
 
-    public function addClosureDetails(int $incidentId, IncidentClosureData $data): void
+    public function addClosureDetails(int|string $incidentId, IncidentClosureData $data): void
     {
-        $this->client->send(new SetIncidentClosureDetailsRequest($incidentId, $data));
+        $this->client->send(new SetIncidentClosureDetailsRequest((int) $incidentId, $data));
     }
 
-    public function posts(int $incidentId): IncidentPostResource
+    public function posts(int|string $incidentId): IncidentPostResource
     {
-        return new IncidentPostResource($this->client, $incidentId);
+        return new IncidentPostResource($this->client, (int) $incidentId);
     }
 }

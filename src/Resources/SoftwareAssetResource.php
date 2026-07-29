@@ -33,9 +33,9 @@ final readonly class SoftwareAssetResource
         ));
     }
 
-    public function find(int $softwareAssetId): SoftwareAssetData
+    public function find(int|string $softwareAssetId): SoftwareAssetData
     {
-        $response = $this->client->send(new GetSoftwareAssetRequest($softwareAssetId));
+        $response = $this->client->send(new GetSoftwareAssetRequest((int) $softwareAssetId));
 
         /** @var array<string, mixed> $payload */
         $payload = $response->json();
@@ -51,11 +51,11 @@ final readonly class SoftwareAssetResource
      * @throws ValidationException
      */
     public function createRelease(
-        int $softwareAssetId,
+        int|string $softwareAssetId,
         CreateSoftwareAssetReleaseData $data,
     ): CreatedReleaseData {
         $response = $this->client->send(new CreateSoftwareAssetReleaseRequest(
-            $softwareAssetId,
+            (int) $softwareAssetId,
             $data,
         ));
 

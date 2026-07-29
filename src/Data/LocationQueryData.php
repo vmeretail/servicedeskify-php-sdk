@@ -25,4 +25,14 @@ final readonly class LocationQueryData
             'customer' => $this->customer,
         ], static fn (mixed $value): bool => $value !== null);
     }
+
+    public function withPage(int $page): self
+    {
+        return new self(
+            page: $page,
+            store: $this->store,
+            name: $this->name,
+            customer: $this->customer,
+        );
+    }
 }

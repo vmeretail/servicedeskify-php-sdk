@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace VmeRetail\ServiceDeskify\Data;
 
 use Carbon\CarbonImmutable;
-use UnexpectedValueException;
 use VmeRetail\ServiceDeskify\Enums\PostType;
+use VmeRetail\ServiceDeskify\Exceptions\UnexpectedResponseException;
 
 final readonly class IncidentPostData
 {
@@ -29,7 +29,7 @@ final readonly class IncidentPostData
     public static function fromArray(array $data): self
     {
         if (! array_key_exists('id', $data) || ! is_numeric($data['id'])) {
-            throw new UnexpectedValueException('The incident post response is missing a valid [id].');
+            throw new UnexpectedResponseException('The incident post response is missing a valid [id].');
         }
 
         $createdBy = DataMapper::array($data['created_by'] ?? null);

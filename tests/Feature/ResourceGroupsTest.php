@@ -24,6 +24,7 @@ use VmeRetail\ServiceDeskify\Data\IncidentData;
 use VmeRetail\ServiceDeskify\Data\IncidentPostData;
 use VmeRetail\ServiceDeskify\Data\IncidentPostQueryData;
 use VmeRetail\ServiceDeskify\Data\IncidentQueryData;
+use VmeRetail\ServiceDeskify\Data\LocationData;
 use VmeRetail\ServiceDeskify\Data\LocationQueryData;
 use VmeRetail\ServiceDeskify\Data\ReleaseQueryData;
 use VmeRetail\ServiceDeskify\Data\SoftwareAssetData;
@@ -32,12 +33,15 @@ use VmeRetail\ServiceDeskify\Enums\IncidentPriority;
 use VmeRetail\ServiceDeskify\Enums\IncidentStatus;
 use VmeRetail\ServiceDeskify\Enums\PostType;
 use VmeRetail\ServiceDeskify\Enums\SortDirection;
+use VmeRetail\ServiceDeskify\Exceptions\ServiceDeskifyRequestException;
+use VmeRetail\ServiceDeskify\Exceptions\UnexpectedResponseException;
 use VmeRetail\ServiceDeskify\Facades\ServiceDeskify;
 use VmeRetail\ServiceDeskify\Requests\IncidentPosts\CreateIncidentPostRequest;
 use VmeRetail\ServiceDeskify\Requests\IncidentPosts\DownloadIncidentAttachmentRequest;
 use VmeRetail\ServiceDeskify\Requests\IncidentPosts\ListIncidentPostsRequest;
 use VmeRetail\ServiceDeskify\Requests\Incidents\CloseIncidentRequest;
 use VmeRetail\ServiceDeskify\Requests\Incidents\CreateIncidentRequest;
+use VmeRetail\ServiceDeskify\Requests\Incidents\GetIncidentRequest;
 use VmeRetail\ServiceDeskify\Requests\Incidents\ListIncidentsRequest;
 use VmeRetail\ServiceDeskify\Requests\Incidents\SetIncidentClosureDetailsRequest;
 use VmeRetail\ServiceDeskify\Requests\Locations\ListLocationsRequest;
@@ -74,18 +78,18 @@ it('exposes the complete selected helpdesk api through resource groups', functio
         page: 2,
         status: IncidentStatus::Open,
     ));
-    $posts = ServiceDeskify::incidents()->posts(10)->all(new IncidentPostQueryData(
+    $posts = ServiceDeskify::incidents()->posts('10')->all(new IncidentPostQueryData(
         page: 1,
         perPage: 25,
         sortDirection: SortDirection::Descending,
         since: CarbonImmutable::parse('2026-07-01 12:00:00'),
     ));
-    $createdPost = ServiceDeskify::incidents()->posts(10)->create(new CreateIncidentPostData(
+    $createdPost = ServiceDeskify::incidents()->posts('10')->create(new CreateIncidentPostData(
         details: 'This is an internal update.',
         type: PostType::Private,
     ));
-    ServiceDeskify::incidents()->close(10);
-    ServiceDeskify::incidents()->addClosureDetails(10, new IncidentClosureData(
+    ServiceDeskify::incidents()->close('10');
+    ServiceDeskify::incidents()->addClosureDetails('10', new IncidentClosureData(
         symptom: 'Till offline',
         symptomSolution: 'Restarted service',
         cause: 'Stopped service',
@@ -96,9 +100,9 @@ it('exposes the complete selected helpdesk api through resource groups', functio
         customer: 'Customer',
     ));
     $assets = ServiceDeskify::softwareAssets()->all();
-    $asset = ServiceDeskify::softwareAssets()->find(40);
+    $asset = ServiceDeskify::softwareAssets()->find('40');
     $createdRelease = ServiceDeskify::softwareAssets()->createRelease(
-        40,
+        '40',
         new CreateSoftwareAssetReleaseData(
             version: '4.2.0',
             date: CarbonImmutable::parse('2026-07-28'),
@@ -107,8 +111,8 @@ it('exposes the complete selected helpdesk api through resource groups', functio
     $releases = ServiceDeskify::releases()->all(new ReleaseQueryData(
         CarbonImmutable::parse('2026-07-01'),
     ));
-    ServiceDeskify::releases()->updateUrl(50, 'https://example.test/releases/4.2.0');
-    $download = ServiceDeskify::incidents()->posts(10)->download(20, 70);
+    ServiceDeskify::releases()->updateUrl('50', 'https://example.test/releases/4.2.0');
+    $download = ServiceDeskify::incidents()->posts('10')->download('20', '70');
 
     expect($incidents->items[0]->id)->toBe(10)
         ->and($incidents->currentPage)->toBe(1)
@@ -291,7 +295,16 @@ it('fails loudly when response identity fields are missing', function (
     callable $hydrate,
     string $message,
 ): void {
-    expect(fn () => $hydrate([]))->toThrow(UnexpectedValueException::class, $message);
+    try {
+        $hydrate([]);
+    } catch (ServiceDeskifyRequestException $exception) {
+        expect($exception)->toBeInstanceOf(UnexpectedResponseException::class)
+            ->and($exception->getMessage())->toContain($message);
+
+        return;
+    }
+
+    $this->fail('An unexpected API response did not throw a package request exception.');
 })->with([
     'incident' => [IncidentData::fromArray(...), 'incident response'],
     'incident post' => [IncidentPostData::fromArray(...), 'incident post response'],
@@ -299,11 +312,21 @@ it('fails loudly when response identity fields are missing', function (
     'software asset summary' => [SoftwareAssetSummaryData::fromArray(...), 'software asset summary response'],
 ]);
 
-it('lazily walks every incident page', function (): void {
+it('advances requested incident pages without current-page metadata and stops on an empty page', function (): void {
     $mock = MockClient::global([
         tokenResponse(),
-        MockResponse::make(paginatedPage([incidentPayload(91)], currentPage: 1, lastPage: 2)),
-        MockResponse::make(paginatedPage([incidentPayload(92)], currentPage: 2, lastPage: 2)),
+        MockResponse::make(paginatedPage(
+            [incidentPayload(91)],
+            currentPage: 1,
+            lastPage: 4,
+            includeCurrentPage: false,
+        )),
+        MockResponse::make(paginatedPage(
+            [],
+            currentPage: 2,
+            lastPage: 4,
+            includeCurrentPage: false,
+        )),
     ]);
 
     $incidents = iterator_to_array(ServiceDeskify::incidents()->lazy(
@@ -313,7 +336,9 @@ it('lazily walks every incident page', function (): void {
     expect(array_map(
         static fn (IncidentData $incident): int => $incident->id,
         $incidents,
-    ))->toBe([91, 92]);
+    ))->toBe([91]);
+
+    $mock->assertSentCount(3);
 
     foreach ([1, 2] as $page) {
         assertApiRequestSent(
@@ -327,6 +352,112 @@ it('lazily walks every incident page', function (): void {
                 ->all() === ['page' => $page, 'status' => 'open'],
         );
     }
+});
+
+it('walks every post and location page without dropping query fields', function (): void {
+    $mock = MockClient::global([
+        tokenResponse(),
+        MockResponse::make(paginatedPage([postPayload(101)], currentPage: 1, lastPage: 2)),
+        MockResponse::make(paginatedPage([postPayload(102)], currentPage: 2, lastPage: 2)),
+        MockResponse::make(rawPaginatedPage([locationPayload(201)], currentPage: 1, lastPage: 2)),
+        MockResponse::make(rawPaginatedPage([locationPayload(202)], currentPage: 2, lastPage: 2)),
+    ]);
+
+    $since = CarbonImmutable::parse('2026-07-01 12:00:00');
+    $posts = iterator_to_array(ServiceDeskify::incidents()->posts('10')->lazy(
+        new IncidentPostQueryData(
+            perPage: 25,
+            sortDirection: SortDirection::Descending,
+            since: $since,
+        ),
+    ));
+    $locations = iterator_to_array(ServiceDeskify::locations()->lazy(
+        new LocationQueryData(
+            store: '722',
+            name: 'Town',
+            customer: 'Customer',
+        ),
+    ));
+
+    expect(array_map(
+        static fn (IncidentPostData $post): int => $post->id,
+        $posts,
+    ))->toBe([101, 102])
+        ->and(array_map(
+            static fn (LocationData $location): int => $location->id,
+            $locations,
+        ))->toBe([201, 202]);
+
+    foreach ([1, 2] as $page) {
+        assertApiRequestSent(
+            $mock,
+            ListIncidentPostsRequest::class,
+            Method::GET,
+            '/api/incidents/10/posts',
+            static fn (Request $request, Response $response): bool => $response
+                ->getPendingRequest()
+                ->query()
+                ->all() === [
+                    'page' => $page,
+                    'per_page' => 25,
+                    'sort_direction' => 'desc',
+                    'since' => '2026-07-01T12:00:00+00:00',
+                ],
+        );
+        assertApiRequestSent(
+            $mock,
+            ListLocationsRequest::class,
+            Method::GET,
+            '/api/locations',
+            static fn (Request $request, Response $response): bool => $response
+                ->getPendingRequest()
+                ->query()
+                ->all() === [
+                    'page' => $page,
+                    'store' => '722',
+                    'name' => 'Town',
+                    'customer' => 'Customer',
+                ],
+        );
+    }
+});
+
+it('stops each pagination when the callback returns false', function (): void {
+    $mock = MockClient::global([
+        tokenResponse(),
+        MockResponse::make(paginatedPage(
+            [incidentPayload(301), incidentPayload(302)],
+            currentPage: 1,
+            lastPage: 2,
+        )),
+        MockResponse::make(paginatedPage([incidentPayload(303)], currentPage: 2, lastPage: 2)),
+    ]);
+    $seen = [];
+
+    ServiceDeskify::incidents()->each(function (IncidentData $incident) use (&$seen): bool {
+        $seen[] = $incident->id;
+
+        return false;
+    });
+
+    expect($seen)->toBe([301]);
+    $mock->assertSentCount(2);
+});
+
+it('accepts numeric string ids from laravel route and input values', function (): void {
+    $mock = MockClient::global([
+        tokenResponse(),
+        MockResponse::make(['data' => incidentPayload(5)]),
+    ]);
+
+    expect(ServiceDeskify::incidents()->find('5')->id)->toBe(5);
+
+    assertApiRequestSent(
+        $mock,
+        GetIncidentRequest::class,
+        Method::GET,
+        '/api/incidents/5',
+    );
 });
 
 it('sends incident creation as json when it has no attachments', function (): void {
@@ -574,8 +705,12 @@ function paginated(array $data): array
  * @param  array<int, array<string, mixed>>  $data
  * @return array<string, mixed>
  */
-function paginatedPage(array $data, int $currentPage, int $lastPage): array
-{
+function paginatedPage(
+    array $data,
+    int $currentPage,
+    int $lastPage,
+    bool $includeCurrentPage = true,
+): array {
     $payload = paginated($data);
     $payload['meta']['current_page'] = $currentPage;
     $payload['meta']['last_page'] = $lastPage;
@@ -583,6 +718,10 @@ function paginatedPage(array $data, int $currentPage, int $lastPage): array
     $payload['links']['next'] = $currentPage < $lastPage
         ? 'https://helpdesk.example.test/api/incidents?page='.($currentPage + 1)
         : null;
+
+    if (! $includeCurrentPage) {
+        unset($payload['meta']['current_page']);
+    }
 
     return $payload;
 }
@@ -606,6 +745,23 @@ function rawPaginated(array $data): array
         'to' => count($data),
         'total' => count($data),
     ];
+}
+
+/**
+ * @param  array<int, array<string, mixed>>  $data
+ * @return array<string, mixed>
+ */
+function rawPaginatedPage(array $data, int $currentPage, int $lastPage): array
+{
+    $payload = rawPaginated($data);
+    $payload['current_page'] = $currentPage;
+    $payload['last_page'] = $lastPage;
+    $payload['total'] = $lastPage * 15;
+    $payload['next_page_url'] = $currentPage < $lastPage
+        ? 'https://helpdesk.example.test/api/locations?page='.($currentPage + 1)
+        : null;
+
+    return $payload;
 }
 
 /**

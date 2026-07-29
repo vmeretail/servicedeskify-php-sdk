@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace VmeRetail\ServiceDeskify\Data;
 
-use UnexpectedValueException;
+use VmeRetail\ServiceDeskify\Exceptions\UnexpectedResponseException;
 
 final readonly class SoftwareAssetSummaryData
 {
@@ -20,7 +20,7 @@ final readonly class SoftwareAssetSummaryData
     public static function fromArray(array $data): self
     {
         if (! array_key_exists('id', $data) || ! is_numeric($data['id'])) {
-            throw new UnexpectedValueException('The software asset summary response is missing a valid [id].');
+            throw new UnexpectedResponseException('The software asset summary response is missing a valid [id].');
         }
 
         return new self(

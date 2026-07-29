@@ -23,4 +23,12 @@ final readonly class IncidentQueryData
             'status' => $this->status?->value,
         ], static fn (mixed $value): bool => $value !== null);
     }
+
+    public function withPage(int $page): self
+    {
+        return new self(
+            page: $page,
+            status: $this->status,
+        );
+    }
 }

@@ -30,4 +30,14 @@ final readonly class IncidentPostQueryData
             'since' => $this->since?->toAtomString(),
         ], static fn (mixed $value): bool => $value !== null);
     }
+
+    public function withPage(int $page): self
+    {
+        return new self(
+            page: $page,
+            perPage: $this->perPage,
+            sortDirection: $this->sortDirection,
+            since: $this->since,
+        );
+    }
 }

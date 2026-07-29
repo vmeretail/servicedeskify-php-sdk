@@ -30,8 +30,8 @@ final readonly class ReleaseResource
         ));
     }
 
-    public function updateUrl(int $releaseId, string $url): void
+    public function updateUrl(int|string $releaseId, string $url): void
     {
-        $this->client->send(new UpdateReleaseUrlRequest($releaseId, $url));
+        $this->client->send(new UpdateReleaseUrlRequest((int) $releaseId, $url));
     }
 }

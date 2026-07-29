@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace VmeRetail\ServiceDeskify\Data;
 
 use Carbon\CarbonImmutable;
-use UnexpectedValueException;
 use VmeRetail\ServiceDeskify\Enums\IncidentPriority;
+use VmeRetail\ServiceDeskify\Exceptions\UnexpectedResponseException;
 
 final readonly class IncidentData
 {
@@ -38,7 +38,7 @@ final readonly class IncidentData
     public static function fromArray(array $data): self
     {
         if (! array_key_exists('id', $data) || ! is_numeric($data['id'])) {
-            throw new UnexpectedValueException('The incident response is missing a valid [id].');
+            throw new UnexpectedResponseException('The incident response is missing a valid [id].');
         }
 
         $reporter = DataMapper::array($data['reporter'] ?? null);

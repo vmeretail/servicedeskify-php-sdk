@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace VmeRetail\ServiceDeskify\Resources;
 
+use Generator;
 use VmeRetail\ServiceDeskify\Data\LocationData;
 use VmeRetail\ServiceDeskify\Data\LocationQueryData;
 use VmeRetail\ServiceDeskify\Data\PaginatedData;
@@ -27,5 +28,44 @@ final readonly class LocationResource
         $payload = $response->json();
 
         return PaginatedData::fromArray($payload, LocationData::fromArray(...));
+    }
+
+    /**
+     * Lazily retrieve locations from the requested page through to the final page.
+     *
+     * @return Generator<int, LocationData>
+     */
+    public function lazy(?LocationQueryData $query = null): Generator
+    {
+        $query ??= new LocationQueryData;
+        $page = max(1, $query->page);
+
+        do {
+            $locations = $this->all($query->withPage($page));
+
+            if ($locations->items === []) {
+                return;
+            }
+
+            foreach ($locations as $location) {
+                yield $location;
+            }
+
+            $page++;
+        } while ($page <= $locations->lastPage);
+    }
+
+    /**
+     * Iterate lazily, stopping early when the callback returns false.
+     *
+     * @param  callable(LocationData): mixed  $callback
+     */
+    public function each(callable $callback, ?LocationQueryData $query = null): void
+    {
+        foreach ($this->lazy($query) as $location) {
+            if ($callback($location) === false) {
+                return;
+            }
+        }
     }
 }
