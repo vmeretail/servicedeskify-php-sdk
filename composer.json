@@ -1,16 +1,56 @@
 {
     "license": "MIT",
     "name": "vmeretail/servicedeskify-php-sdk",
-    "description": "The ServiceDeskify helpdesk PHP library provides convienient access to VmeRetail's ServiceDeskify api from apps written in PHP. It includes a pre-defined set of classes for API resources.",
+    "description": "A Laravel package for interacting with the Vme Retail ServiceDeskify API.",
     "type": "library",
-    "minimum-stability": "dev",
     "require": {
-        "php": "~7.0|~8.0",
-        "guzzlehttp/guzzle": "~6.0|~7.0"
+        "php": "^8.2",
+        "illuminate/contracts": "^11.0|^12.0|^13.0",
+        "illuminate/http": "^11.0|^12.0|^13.0",
+        "illuminate/support": "^11.0|^12.0|^13.0",
+        "saloonphp/saloon": "^4.0"
+    },
+    "require-dev": {
+        "larastan/larastan": "^3.0",
+        "laravel/pint": "^1.0",
+        "orchestra/testbench": "^9.0|^10.0|^11.0",
+        "pestphp/pest": "^3.8|^4.0",
+        "pestphp/pest-plugin-laravel": "^3.0|^4.0"
     },
     "autoload": {
         "psr-4": {
-            "VmeRetail\\ServiceDeskify\\": "lib/"
+            "VmeRetail\\ServiceDeskify\\": "src/"
         }
-    }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "VmeRetail\\ServiceDeskify\\ServiceDeskifyServiceProvider"
+            ]
+        }
+    },
+    "scripts": {
+        "analyse": "phpstan analyse --memory-limit=1G",
+        "format": "pint",
+        "test": "pest",
+        "verify": [
+            "@composer validate --strict",
+            "@composer format -- --test",
+            "@composer analyse",
+            "@composer test"
+        ]
+    },
+    "config": {
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        },
+        "sort-packages": true
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
 }

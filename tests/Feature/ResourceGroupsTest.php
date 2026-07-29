@@ -1,0 +1,522 @@
+<?php
+
+declare(strict_types=1);
+
+use Carbon\CarbonImmutable;
+use Illuminate\Http\UploadedFile;
+use Saloon\Data\MultipartValue;
+use Saloon\Enums\Method;
+use Saloon\Http\Faking\MockClient;
+use Saloon\Http\Faking\MockResponse;
+use Saloon\Http\Request;
+use Saloon\Http\Response;
+use Saloon\Repositories\Body\JsonBodyRepository;
+use Saloon\Repositories\Body\MultipartBodyRepository;
+use VmeRetail\ServiceDeskify\Data\CreateIncidentData;
+use VmeRetail\ServiceDeskify\Data\CreateIncidentPostData;
+use VmeRetail\ServiceDeskify\Data\CreateSoftwareAssetReleaseData;
+use VmeRetail\ServiceDeskify\Data\IncidentClosureData;
+use VmeRetail\ServiceDeskify\Data\IncidentPostQueryData;
+use VmeRetail\ServiceDeskify\Data\IncidentQueryData;
+use VmeRetail\ServiceDeskify\Data\LocationQueryData;
+use VmeRetail\ServiceDeskify\Data\ReleaseQueryData;
+use VmeRetail\ServiceDeskify\Enums\IncidentPriority;
+use VmeRetail\ServiceDeskify\Enums\IncidentStatus;
+use VmeRetail\ServiceDeskify\Enums\PostType;
+use VmeRetail\ServiceDeskify\Enums\SortDirection;
+use VmeRetail\ServiceDeskify\Facades\ServiceDeskify;
+use VmeRetail\ServiceDeskify\Requests\IncidentPosts\CreateIncidentPostRequest;
+use VmeRetail\ServiceDeskify\Requests\IncidentPosts\DownloadIncidentAttachmentRequest;
+use VmeRetail\ServiceDeskify\Requests\IncidentPosts\ListIncidentPostsRequest;
+use VmeRetail\ServiceDeskify\Requests\Incidents\CloseIncidentRequest;
+use VmeRetail\ServiceDeskify\Requests\Incidents\CreateIncidentRequest;
+use VmeRetail\ServiceDeskify\Requests\Incidents\ListIncidentsRequest;
+use VmeRetail\ServiceDeskify\Requests\Incidents\SetIncidentClosureDetailsRequest;
+use VmeRetail\ServiceDeskify\Requests\Locations\ListLocationsRequest;
+use VmeRetail\ServiceDeskify\Requests\Releases\ListReleasesRequest;
+use VmeRetail\ServiceDeskify\Requests\Releases\UpdateReleaseUrlRequest;
+use VmeRetail\ServiceDeskify\Requests\SoftwareAssets\CreateSoftwareAssetReleaseRequest;
+use VmeRetail\ServiceDeskify\Requests\SoftwareAssets\GetSoftwareAssetRequest;
+use VmeRetail\ServiceDeskify\Requests\SoftwareAssets\ListSoftwareAssetsRequest;
+
+it('exposes the complete selected helpdesk api through resource groups', function (): void {
+    $mock = MockClient::global([
+        tokenResponse(),
+        MockResponse::make(paginated([incidentPayload(10)])),
+        MockResponse::make(paginated([postPayload(20)])),
+        MockResponse::make(['data' => postPayload(21)], 201),
+        MockResponse::make('', 200),
+        MockResponse::make('', 204),
+        MockResponse::make(rawPaginated([locationPayload(30)])),
+        MockResponse::make([softwareAssetPayload(40)]),
+        MockResponse::make(softwareAssetPayload(40, withRelease: true)),
+        MockResponse::make([
+            'software_asset_version_id' => 50,
+            'master_software_asset_version_id' => 60,
+        ], 201),
+        MockResponse::make([releasePayload(50)]),
+        MockResponse::make('', 204),
+        MockResponse::make('pdf-binary', 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="evidence.pdf"',
+        ]),
+    ]);
+
+    $incidents = ServiceDeskify::incidents()->all(new IncidentQueryData(
+        page: 2,
+        status: IncidentStatus::Open,
+    ));
+    $posts = ServiceDeskify::incidents()->posts(10)->all(new IncidentPostQueryData(
+        page: 1,
+        perPage: 25,
+        sortDirection: SortDirection::Descending,
+        since: CarbonImmutable::parse('2026-07-01 12:00:00'),
+    ));
+    $createdPost = ServiceDeskify::incidents()->posts(10)->create(new CreateIncidentPostData(
+        details: 'This is an internal update.',
+        type: PostType::Private,
+    ));
+    ServiceDeskify::incidents()->close(10);
+    ServiceDeskify::incidents()->addClosureDetails(10, new IncidentClosureData(
+        symptom: 'Till offline',
+        symptomSolution: 'Restarted service',
+        cause: 'Stopped service',
+        permanentResolution: 'Added monitoring',
+    ));
+    $locations = ServiceDeskify::locations()->all(new LocationQueryData(
+        store: '722',
+        customer: 'Customer',
+    ));
+    $assets = ServiceDeskify::softwareAssets()->all();
+    $asset = ServiceDeskify::softwareAssets()->find(40);
+    $createdRelease = ServiceDeskify::softwareAssets()->createRelease(
+        40,
+        new CreateSoftwareAssetReleaseData(
+            version: '4.2.0',
+            date: CarbonImmutable::parse('2026-07-28'),
+        ),
+    );
+    $releases = ServiceDeskify::releases()->all(new ReleaseQueryData(
+        CarbonImmutable::parse('2026-07-01'),
+    ));
+    ServiceDeskify::releases()->updateUrl(50, 'https://example.test/releases/4.2.0');
+    $download = ServiceDeskify::incidents()->posts(10)->download(20, 70);
+
+    expect($incidents->items[0]->id)->toBe(10)
+        ->and($incidents->currentPage)->toBe(1)
+        ->and($posts->items[0]->id)->toBe(20)
+        ->and($incidents->items[0]->priority)->toBe(IncidentPriority::P1)
+        ->and($createdPost->id)->toBe(21)
+        ->and($createdPost->type)->toBe(PostType::Public)
+        ->and($locations->items[0]->storeNumber)->toBe('722')
+        ->and($assets[0]->name)->toBe('ServiceDeskify')
+        ->and($asset->currentRelease?->version)->toBe('4.2.0')
+        ->and($createdRelease->softwareAssetVersionId)->toBe(50)
+        ->and($releases[0]->version)->toBe('4.2.0')
+        ->and($download->fileName)->toBe('evidence.pdf')
+        ->and($download->contentType)->toBe('application/pdf')
+        ->and($download->stream->getContents())->toBe('pdf-binary');
+
+    $temporaryPath = tempnam(sys_get_temp_dir(), 'servicedeskify-download-');
+
+    expect($temporaryPath)->toBeString();
+
+    try {
+        $download->saveTo($temporaryPath);
+        expect(file_get_contents($temporaryPath))->toBe('pdf-binary');
+    } finally {
+        unlink($temporaryPath);
+    }
+
+    assertApiRequestSent(
+        $mock,
+        ListIncidentsRequest::class,
+        Method::GET,
+        '/api/incidents',
+        static fn (Request $request, Response $response): bool => $response
+            ->getPendingRequest()
+            ->query()
+            ->all() === ['page' => 2, 'status' => 'open'],
+    );
+    assertApiRequestSent(
+        $mock,
+        ListIncidentPostsRequest::class,
+        Method::GET,
+        '/api/incidents/10/posts',
+        static fn (Request $request, Response $response): bool => $response
+            ->getPendingRequest()
+            ->query()
+            ->all() === [
+                'page' => 1,
+                'per_page' => 25,
+                'sort_direction' => 'desc',
+                'since' => '2026-07-01T12:00:00+00:00',
+            ],
+    );
+    assertApiRequestSent(
+        $mock,
+        CreateIncidentPostRequest::class,
+        Method::POST,
+        '/api/incidents/10/posts',
+        static fn (Request $request, Response $response): bool => $response
+            ->getPendingRequest()
+            ->body()
+            ?->all() === [
+                'details' => 'This is an internal update.',
+                'type' => 'private',
+            ],
+    );
+    assertApiRequestSent($mock, CloseIncidentRequest::class, Method::POST, '/api/incidents/10/close');
+    assertApiRequestSent(
+        $mock,
+        SetIncidentClosureDetailsRequest::class,
+        Method::POST,
+        '/api/incidents/10/closure-details',
+        static fn (Request $request, Response $response): bool => $response
+            ->getPendingRequest()
+            ->body()
+            ?->all() === [
+                'symptom' => 'Till offline',
+                'symptomSolution' => 'Restarted service',
+                'cause' => 'Stopped service',
+                'permanentResolution' => 'Added monitoring',
+            ],
+    );
+    assertApiRequestSent(
+        $mock,
+        ListLocationsRequest::class,
+        Method::GET,
+        '/api/locations',
+        static fn (Request $request, Response $response): bool => $response
+            ->getPendingRequest()
+            ->query()
+            ->all() === [
+                'page' => 1,
+                'store' => '722',
+                'customer' => 'Customer',
+            ],
+    );
+    assertApiRequestSent($mock, ListSoftwareAssetsRequest::class, Method::GET, '/api/software-assets');
+    assertApiRequestSent($mock, GetSoftwareAssetRequest::class, Method::GET, '/api/software-assets/40');
+    assertApiRequestSent(
+        $mock,
+        CreateSoftwareAssetReleaseRequest::class,
+        Method::POST,
+        '/api/software-assets/40/releases',
+        static fn (Request $request, Response $response): bool => $response
+            ->getPendingRequest()
+            ->body()
+            ?->all() === [
+                'version' => '4.2.0',
+                'set_current_version' => true,
+                'date' => '2026-07-28',
+            ],
+    );
+    assertApiRequestSent(
+        $mock,
+        ListReleasesRequest::class,
+        Method::GET,
+        '/api/releases',
+        static fn (Request $request, Response $response): bool => $response
+            ->getPendingRequest()
+            ->query()
+            ->all() === ['date' => '2026-07-01'],
+    );
+    assertApiRequestSent(
+        $mock,
+        UpdateReleaseUrlRequest::class,
+        Method::PUT,
+        '/api/releases/50',
+        static fn (Request $request, Response $response): bool => $response
+            ->getPendingRequest()
+            ->body()
+            ?->all() === ['url' => 'https://example.test/releases/4.2.0'],
+    );
+    assertApiRequestSent(
+        $mock,
+        DownloadIncidentAttachmentRequest::class,
+        Method::GET,
+        '/api/incidents/10/posts/20/attachments/70',
+    );
+});
+
+it('maps helpdesk priority labels', function (string $value, IncidentPriority $priority): void {
+    expect(IncidentPriority::fromApiValue($value))->toBe($priority);
+})->with([
+    'critical' => ['Critical', IncidentPriority::P1],
+    'high' => ['High', IncidentPriority::P2],
+    'moderate' => ['Moderate', IncidentPriority::P3],
+    'low' => ['Low', IncidentPriority::P4],
+    'very low' => ['Very Low', IncidentPriority::P5],
+]);
+
+it('sends incident creation as json when it has no attachments', function (): void {
+    $mock = MockClient::global([
+        tokenResponse(),
+        MockResponse::make(['data' => incidentPayload(80)], 201),
+    ]);
+
+    $incident = ServiceDeskify::incidents()->create(new CreateIncidentData(
+        title: 'Till offline',
+        details: 'Till two cannot connect.',
+        storeNumber: 722,
+        priority: IncidentPriority::P1,
+    ));
+
+    expect($incident->id)->toBe(80);
+
+    $mock->assertSent(function ($request, Response $response): bool {
+        if (! $request instanceof CreateIncidentRequest) {
+            return false;
+        }
+
+        $body = $response->getPendingRequest()->body();
+        $headers = $response->getPendingRequest()->headers();
+
+        return $body instanceof JsonBodyRepository
+            && $headers->get('Content-Type') === 'application/json'
+            && $body->all() === [
+                'title' => 'Till offline',
+                'details' => 'Till two cannot connect.',
+                'store_number' => 722,
+                'priority' => 1,
+            ];
+    });
+    assertApiRequestSent($mock, CreateIncidentRequest::class, Method::POST, '/api/incidents');
+});
+
+it('switches incident creation to multipart when attachments are present', function (): void {
+    $mock = MockClient::global([
+        tokenResponse(),
+        MockResponse::make(['data' => incidentPayload(81)], 201),
+    ]);
+
+    ServiceDeskify::incidents()->create(new CreateIncidentData(
+        title: 'Till offline',
+        details: 'See the attached log.',
+        locationId: 123,
+        attachments: [
+            UploadedFile::fake()->createWithContent('till.log', 'error details'),
+        ],
+    ));
+
+    $mock->assertSent(function ($request, Response $response): bool {
+        if (! $request instanceof CreateIncidentRequest) {
+            return false;
+        }
+
+        $body = $response->getPendingRequest()->body();
+        $contentType = $response->getPendingRequest()->headers()->get('Content-Type');
+        $values = $body?->all();
+
+        if (
+            ! $body instanceof MultipartBodyRepository
+            || ! is_array($values)
+            || ! is_string($contentType)
+            || ! str_starts_with($contentType, 'multipart/form-data; boundary=')
+        ) {
+            return false;
+        }
+
+        $parts = array_values(array_filter(
+            $values,
+            static fn (mixed $value): bool => $value instanceof MultipartValue,
+        ));
+
+        return collect($parts)->contains(
+            static fn (MultipartValue $part): bool => $part->name === 'attachments[]'
+                && $part->filename === 'till.log',
+        );
+    });
+    assertApiRequestSent($mock, CreateIncidentRequest::class, Method::POST, '/api/incidents');
+});
+
+it('rewinds multipart attachments before a request is retried', function (): void {
+    $request = new CreateIncidentRequest(new CreateIncidentData(
+        title: 'Till offline',
+        details: 'See the attached log.',
+        attachments: [
+            UploadedFile::fake()->createWithContent('till.log', 'error details'),
+        ],
+    ));
+
+    $attachment = collect($request->body()->all())->first(
+        static fn (MultipartValue $part): bool => $part->name === 'attachments[]',
+    );
+
+    expect($attachment)->toBeInstanceOf(MultipartValue::class)
+        ->and(is_resource($attachment->value))->toBeTrue();
+
+    fread($attachment->value, 5);
+
+    expect(ftell($attachment->value))->toBe(5);
+
+    $request->prepareForRetry();
+
+    expect(ftell($attachment->value))->toBe(0);
+});
+
+function tokenResponse(): MockResponse
+{
+    return MockResponse::make([
+        'access_token' => 'resource-access',
+        'refresh_token' => 'resource-refresh',
+        'token_type' => 'Bearer',
+        'expires_in' => 3600,
+    ]);
+}
+
+/**
+ * @param  class-string<Request>  $requestClass
+ * @param  null|Closure(Request, Response): bool  $additionalAssertion
+ */
+function assertApiRequestSent(
+    MockClient $mock,
+    string $requestClass,
+    Method $method,
+    string $endpoint,
+    ?Closure $additionalAssertion = null,
+): void {
+    $mock->assertSent(static function (Request $request, Response $response) use (
+        $requestClass,
+        $method,
+        $endpoint,
+        $additionalAssertion,
+    ): bool {
+        $pending = $response->getPendingRequest();
+
+        return $request instanceof $requestClass
+            && $pending->getMethod() === $method
+            && $pending->getUrl() === 'https://helpdesk.example.test'.$endpoint
+            && $pending->headers()->get('Accept') === 'application/json'
+            && $pending->headers()->get('Authorization') === 'Bearer resource-access'
+            && ($additionalAssertion === null || $additionalAssertion($request, $response));
+    });
+}
+
+/**
+ * @param  array<int, array<string, mixed>>  $data
+ * @return array<string, mixed>
+ */
+function paginated(array $data): array
+{
+    return [
+        'data' => $data,
+        'links' => [
+            'first' => 'https://helpdesk.example.test/api/resource?page=1',
+            'last' => 'https://helpdesk.example.test/api/resource?page=1',
+            'prev' => null,
+            'next' => null,
+        ],
+        'meta' => [
+            'current_page' => 1,
+            'from' => 1,
+            'last_page' => 1,
+            'per_page' => 50,
+            'to' => count($data),
+            'total' => count($data),
+        ],
+    ];
+}
+
+/**
+ * @param  array<int, array<string, mixed>>  $data
+ * @return array<string, mixed>
+ */
+function rawPaginated(array $data): array
+{
+    return [
+        'current_page' => 1,
+        'data' => $data,
+        'first_page_url' => 'https://helpdesk.example.test/api/locations?page=1',
+        'from' => 1,
+        'last_page' => 1,
+        'last_page_url' => 'https://helpdesk.example.test/api/locations?page=1',
+        'next_page_url' => null,
+        'per_page' => 15,
+        'prev_page_url' => null,
+        'to' => count($data),
+        'total' => count($data),
+    ];
+}
+
+/**
+ * @return array<string, mixed>
+ */
+function postPayload(int $id): array
+{
+    return [
+        'id' => $id,
+        'detail' => 'We are investigating.',
+        'created_date' => '2026-07-28 11:00:00',
+        'created_by' => [
+            'username' => 'Support Agent',
+            'email' => 'agent@example.test',
+            'avatar' => null,
+        ],
+        'type' => 'public',
+        'attachments' => [],
+    ];
+}
+
+/**
+ * @return array<string, mixed>
+ */
+function locationPayload(int $id): array
+{
+    return [
+        'id' => $id,
+        'name' => 'Store 722',
+        'location_number' => '722',
+        'telephone' => '01234567890',
+        'address' => 'High Street',
+        'enabled' => true,
+        'latitude' => '49.1',
+        'longitude' => '-2.1',
+        'createdAt' => '2020-01-01 00:00:00',
+        'customer' => [
+            'id' => 1,
+            'name' => 'Customer',
+            'type' => 'customer',
+            'enabled' => true,
+        ],
+    ];
+}
+
+/**
+ * @return array<string, mixed>
+ */
+function softwareAssetPayload(int $id, bool $withRelease = false): array
+{
+    return [
+        'id' => $id,
+        'name' => 'ServiceDeskify',
+        'current_release_id' => 50,
+        'currentRelease' => $withRelease ? releasePayload(50) : null,
+        'closed_at' => null,
+    ];
+}
+
+/**
+ * @return array<string, mixed>
+ */
+function releasePayload(int $id): array
+{
+    return [
+        'id' => $id,
+        'version' => '4.2.0',
+        'date' => '2026-07-28',
+        'closed_at' => null,
+        'planned' => false,
+        'url' => null,
+        'softwareAsset' => [
+            'id' => 40,
+            'name' => 'ServiceDeskify',
+        ],
+        'masterVersion' => [
+            'id' => 60,
+            'name' => '4.2.0',
+            'closed_at' => null,
+        ],
+    ];
+}

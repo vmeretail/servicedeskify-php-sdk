@@ -1,0 +1,57 @@
+<?php
+
+declare(strict_types=1);
+
+namespace VmeRetail\ServiceDeskify\Resources;
+
+use VmeRetail\ServiceDeskify\Data\CreatedReleaseData;
+use VmeRetail\ServiceDeskify\Data\CreateSoftwareAssetReleaseData;
+use VmeRetail\ServiceDeskify\Data\SoftwareAssetData;
+use VmeRetail\ServiceDeskify\Requests\SoftwareAssets\CreateSoftwareAssetReleaseRequest;
+use VmeRetail\ServiceDeskify\Requests\SoftwareAssets\GetSoftwareAssetRequest;
+use VmeRetail\ServiceDeskify\Requests\SoftwareAssets\ListSoftwareAssetsRequest;
+use VmeRetail\ServiceDeskify\ServiceDeskifyClient;
+
+final readonly class SoftwareAssetResource
+{
+    public function __construct(private ServiceDeskifyClient $client) {}
+
+    /**
+     * @return array<int, SoftwareAssetData>
+     */
+    public function all(): array
+    {
+        $response = $this->client->send(new ListSoftwareAssetsRequest);
+        $payload = $response->json();
+
+        return array_values(array_map(
+            static fn (array $asset): SoftwareAssetData => SoftwareAssetData::fromArray($asset),
+            array_filter($payload, 'is_array'),
+        ));
+    }
+
+    public function find(int $softwareAssetId): SoftwareAssetData
+    {
+        $response = $this->client->send(new GetSoftwareAssetRequest($softwareAssetId));
+
+        /** @var array<string, mixed> $payload */
+        $payload = $response->json();
+
+        return SoftwareAssetData::fromArray($payload);
+    }
+
+    public function createRelease(
+        int $softwareAssetId,
+        CreateSoftwareAssetReleaseData $data,
+    ): CreatedReleaseData {
+        $response = $this->client->send(new CreateSoftwareAssetReleaseRequest(
+            $softwareAssetId,
+            $data,
+        ));
+
+        /** @var array<string, mixed> $payload */
+        $payload = $response->json();
+
+        return CreatedReleaseData::fromArray($payload);
+    }
+}
