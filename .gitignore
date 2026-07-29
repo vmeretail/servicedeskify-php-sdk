@@ -1,7 +1,7 @@
-/vendor/
+/.phpunit.cache
+/.phpunit.result.cache
 /.idea
-composer.phar
-composer.lock
-.env
-
-
+/.env
+/composer.lock
+/composer.phar
+/vendor/
