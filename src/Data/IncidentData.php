@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace VmeRetail\ServiceDeskify\Data;
 
 use Carbon\CarbonImmutable;
+use UnexpectedValueException;
 use VmeRetail\ServiceDeskify\Enums\IncidentPriority;
 
 final readonly class IncidentData
 {
     /**
      * @param  array<int, AttachmentData>  $attachments
+     * @param  CarbonImmutable|null  $createdDate  The API returns this as a naive UTC timestamp.
      */
     public function __construct(
         public int $id,
@@ -35,13 +37,17 @@ final readonly class IncidentData
      */
     public static function fromArray(array $data): self
     {
+        if (! array_key_exists('id', $data) || ! is_numeric($data['id'])) {
+            throw new UnexpectedValueException('The incident response is missing a valid [id].');
+        }
+
         $reporter = DataMapper::array($data['reporter'] ?? null);
         $location = DataMapper::array($data['location'] ?? null);
         $assignee = DataMapper::array($data['assignee'] ?? null);
         $attachments = is_array($data['attachments'] ?? null) ? $data['attachments'] : [];
 
         return new self(
-            id: (int) ($data['id'] ?? 0),
+            id: (int) $data['id'],
             title: (string) ($data['title'] ?? ''),
             summary: (string) ($data['summary'] ?? ''),
             reporter: $reporter === null ? null : UserData::fromArray($reporter),

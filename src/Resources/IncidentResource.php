@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace VmeRetail\ServiceDeskify\Resources;
 
+use Generator;
 use VmeRetail\ServiceDeskify\Data\CreateIncidentData;
 use VmeRetail\ServiceDeskify\Data\IncidentClosureData;
 use VmeRetail\ServiceDeskify\Data\IncidentData;
@@ -33,6 +34,42 @@ final readonly class IncidentResource
         $payload = $response->json();
 
         return PaginatedData::fromArray($payload, IncidentData::fromArray(...));
+    }
+
+    /**
+     * Lazily retrieve incidents from the requested page through to the final page.
+     *
+     * @return Generator<int, IncidentData>
+     */
+    public function lazy(?IncidentQueryData $query = null): Generator
+    {
+        $query ??= new IncidentQueryData;
+        $page = max(1, $query->page);
+
+        do {
+            $incidents = $this->all(new IncidentQueryData(
+                page: $page,
+                status: $query->status,
+            ));
+
+            foreach ($incidents as $incident) {
+                yield $incident;
+            }
+
+            $page = $incidents->currentPage + 1;
+        } while ($incidents->currentPage < $incidents->lastPage);
+    }
+
+    /**
+     * @param  callable(IncidentData): mixed  $callback
+     */
+    public function each(callable $callback, ?IncidentQueryData $query = null): void
+    {
+        foreach ($this->lazy($query) as $incident) {
+            if ($callback($incident) === false) {
+                return;
+            }
+        }
     }
 
     public function find(int $incidentId): IncidentData

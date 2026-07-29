@@ -8,6 +8,7 @@ use Illuminate\Http\UploadedFile;
 use InvalidArgumentException;
 use Saloon\Data\MultipartValue;
 use SplFileInfo;
+use Throwable;
 
 final class AttachmentNormalizer
 {
@@ -17,28 +18,43 @@ final class AttachmentNormalizer
      */
     public static function multipartValues(array $attachments): array
     {
-        return array_map(static function (UploadedFile|SplFileInfo|string $attachment): MultipartValue {
-            $path = match (true) {
-                $attachment instanceof UploadedFile => $attachment->getRealPath(),
-                $attachment instanceof SplFileInfo => $attachment->getPathname(),
-                default => $attachment,
-            };
+        $streams = [];
 
-            if (! is_string($path) || ! is_readable($path)) {
-                throw new InvalidArgumentException('A ServiceDeskify attachment is not readable.');
+        try {
+            $values = [];
+
+            foreach ($attachments as $attachment) {
+                $path = match (true) {
+                    $attachment instanceof UploadedFile => $attachment->getRealPath(),
+                    $attachment instanceof SplFileInfo => $attachment->getPathname(),
+                    default => $attachment,
+                };
+
+                if (! is_string($path) || ! is_readable($path)) {
+                    throw new InvalidArgumentException('A ServiceDeskify attachment is not readable.');
+                }
+
+                $stream = fopen($path, 'rb');
+
+                if ($stream === false) {
+                    throw new InvalidArgumentException("Unable to open ServiceDeskify attachment [{$path}].");
+                }
+
+                $streams[] = $stream;
+                $filename = $attachment instanceof UploadedFile
+                    ? $attachment->getClientOriginalName()
+                    : basename($path);
+
+                $values[] = new MultipartValue('attachments[]', $stream, $filename);
             }
 
-            $stream = fopen($path, 'rb');
-
-            if ($stream === false) {
-                throw new InvalidArgumentException("Unable to open ServiceDeskify attachment [{$path}].");
+            return $values;
+        } catch (Throwable $exception) {
+            foreach ($streams as $stream) {
+                fclose($stream);
             }
 
-            $filename = $attachment instanceof UploadedFile
-                ? $attachment->getClientOriginalName()
-                : basename($path);
-
-            return new MultipartValue('attachments[]', $stream, $filename);
-        }, $attachments);
+            throw $exception;
+        }
     }
 }

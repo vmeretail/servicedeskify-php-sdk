@@ -18,11 +18,16 @@ use VmeRetail\ServiceDeskify\Data\AttachmentDownload;
 use VmeRetail\ServiceDeskify\Data\CreateIncidentData;
 use VmeRetail\ServiceDeskify\Data\CreateIncidentPostData;
 use VmeRetail\ServiceDeskify\Data\CreateSoftwareAssetReleaseData;
+use VmeRetail\ServiceDeskify\Data\DataMapper;
 use VmeRetail\ServiceDeskify\Data\IncidentClosureData;
+use VmeRetail\ServiceDeskify\Data\IncidentData;
+use VmeRetail\ServiceDeskify\Data\IncidentPostData;
 use VmeRetail\ServiceDeskify\Data\IncidentPostQueryData;
 use VmeRetail\ServiceDeskify\Data\IncidentQueryData;
 use VmeRetail\ServiceDeskify\Data\LocationQueryData;
 use VmeRetail\ServiceDeskify\Data\ReleaseQueryData;
+use VmeRetail\ServiceDeskify\Data\SoftwareAssetData;
+use VmeRetail\ServiceDeskify\Data\SoftwareAssetSummaryData;
 use VmeRetail\ServiceDeskify\Enums\IncidentPriority;
 use VmeRetail\ServiceDeskify\Enums\IncidentStatus;
 use VmeRetail\ServiceDeskify\Enums\PostType;
@@ -112,13 +117,17 @@ it('exposes the complete selected helpdesk api through resource groups', functio
         ->and($createdPost->id)->toBe(21)
         ->and($createdPost->type)->toBe(PostType::Public)
         ->and($locations->items[0]->storeNumber)->toBe('722')
+        ->and($assets[0])->toBeInstanceOf(SoftwareAssetSummaryData::class)
         ->and($assets[0]->name)->toBe('ServiceDeskify')
+        ->and($assets[0]->currentReleaseId)->toBe(50)
         ->and($asset->currentRelease?->version)->toBe('4.2.0')
         ->and($createdRelease->softwareAssetVersionId)->toBe(50)
         ->and($releases[0]->version)->toBe('4.2.0')
         ->and($download->fileName)->toBe('evidence.pdf')
         ->and($download->contentType)->toBe('application/pdf')
-        ->and($download->stream->getContents())->toBe('pdf-binary');
+        ->and($download->stream->getContents())->toBe('pdf-binary')
+        ->and(count($incidents))->toBe(1)
+        ->and(iterator_to_array($incidents))->toBe($incidents->items);
 
     $temporaryPath = tempnam(sys_get_temp_dir(), 'servicedeskify-download-');
 
@@ -252,6 +261,73 @@ it('maps helpdesk priority labels', function (string $value, IncidentPriority $p
     'low' => ['Low', IncidentPriority::P4],
     'very low' => ['Very Low', IncidentPriority::P5],
 ]);
+
+it('maps an unset helpdesk priority marker to null', function (): void {
+    expect(IncidentPriority::fromApiValue('-'))->toBeNull();
+});
+
+it('defaults incident creation to moderate priority', function (): void {
+    $data = new CreateIncidentData(
+        title: 'Till offline',
+        details: 'Till two cannot connect.',
+        storeNumber: 722,
+    );
+
+    expect($data->priority)->toBe(IncidentPriority::P3)
+        ->and($data->payload()['priority'])->toBe(3);
+});
+
+it('parses naive api timestamps as utc regardless of the application timezone', function (): void {
+    config()->set('app.timezone', 'Europe/London');
+
+    $date = DataMapper::date('2026-07-28 11:00:00');
+
+    expect($date)->not->toBeNull()
+        ->and($date?->getTimezone()->getName())->toBe('UTC')
+        ->and($date?->toAtomString())->toBe('2026-07-28T11:00:00+00:00');
+});
+
+it('fails loudly when response identity fields are missing', function (
+    callable $hydrate,
+    string $message,
+): void {
+    expect(fn () => $hydrate([]))->toThrow(UnexpectedValueException::class, $message);
+})->with([
+    'incident' => [IncidentData::fromArray(...), 'incident response'],
+    'incident post' => [IncidentPostData::fromArray(...), 'incident post response'],
+    'software asset' => [SoftwareAssetData::fromArray(...), 'software asset response'],
+    'software asset summary' => [SoftwareAssetSummaryData::fromArray(...), 'software asset summary response'],
+]);
+
+it('lazily walks every incident page', function (): void {
+    $mock = MockClient::global([
+        tokenResponse(),
+        MockResponse::make(paginatedPage([incidentPayload(91)], currentPage: 1, lastPage: 2)),
+        MockResponse::make(paginatedPage([incidentPayload(92)], currentPage: 2, lastPage: 2)),
+    ]);
+
+    $incidents = iterator_to_array(ServiceDeskify::incidents()->lazy(
+        new IncidentQueryData(status: IncidentStatus::Open),
+    ));
+
+    expect(array_map(
+        static fn (IncidentData $incident): int => $incident->id,
+        $incidents,
+    ))->toBe([91, 92]);
+
+    foreach ([1, 2] as $page) {
+        assertApiRequestSent(
+            $mock,
+            ListIncidentsRequest::class,
+            Method::GET,
+            '/api/incidents',
+            static fn (Request $request, Response $response): bool => $response
+                ->getPendingRequest()
+                ->query()
+                ->all() === ['page' => $page, 'status' => 'open'],
+        );
+    }
+});
 
 it('sends incident creation as json when it has no attachments', function (): void {
     $mock = MockClient::global([
@@ -492,6 +568,23 @@ function paginated(array $data): array
             'total' => count($data),
         ],
     ];
+}
+
+/**
+ * @param  array<int, array<string, mixed>>  $data
+ * @return array<string, mixed>
+ */
+function paginatedPage(array $data, int $currentPage, int $lastPage): array
+{
+    $payload = paginated($data);
+    $payload['meta']['current_page'] = $currentPage;
+    $payload['meta']['last_page'] = $lastPage;
+    $payload['meta']['total'] = $lastPage * 50;
+    $payload['links']['next'] = $currentPage < $lastPage
+        ? 'https://helpdesk.example.test/api/incidents?page='.($currentPage + 1)
+        : null;
+
+    return $payload;
 }
 
 /**

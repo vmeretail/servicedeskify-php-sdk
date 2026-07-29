@@ -31,7 +31,7 @@ final class DataMapper
         }
 
         try {
-            return CarbonImmutable::parse($value);
+            return CarbonImmutable::parse($value, 'UTC');
         } catch (Throwable) {
             return null;
         }

@@ -7,6 +7,9 @@ namespace VmeRetail\ServiceDeskify\Resources;
 use VmeRetail\ServiceDeskify\Data\CreatedReleaseData;
 use VmeRetail\ServiceDeskify\Data\CreateSoftwareAssetReleaseData;
 use VmeRetail\ServiceDeskify\Data\SoftwareAssetData;
+use VmeRetail\ServiceDeskify\Data\SoftwareAssetSummaryData;
+use VmeRetail\ServiceDeskify\Exceptions\AuthenticationException;
+use VmeRetail\ServiceDeskify\Exceptions\ValidationException;
 use VmeRetail\ServiceDeskify\Requests\SoftwareAssets\CreateSoftwareAssetReleaseRequest;
 use VmeRetail\ServiceDeskify\Requests\SoftwareAssets\GetSoftwareAssetRequest;
 use VmeRetail\ServiceDeskify\Requests\SoftwareAssets\ListSoftwareAssetsRequest;
@@ -17,7 +20,7 @@ final readonly class SoftwareAssetResource
     public function __construct(private ServiceDeskifyClient $client) {}
 
     /**
-     * @return array<int, SoftwareAssetData>
+     * @return array<int, SoftwareAssetSummaryData>
      */
     public function all(): array
     {
@@ -25,7 +28,7 @@ final readonly class SoftwareAssetResource
         $payload = $response->json();
 
         return array_values(array_map(
-            static fn (array $asset): SoftwareAssetData => SoftwareAssetData::fromArray($asset),
+            static fn (array $asset): SoftwareAssetSummaryData => SoftwareAssetSummaryData::fromArray($asset),
             array_filter($payload, 'is_array'),
         ));
     }
@@ -40,6 +43,13 @@ final readonly class SoftwareAssetResource
         return SoftwareAssetData::fromArray($payload);
     }
 
+    /**
+     * Requires an agent account. Versions are unique per software asset, so
+     * posting an existing version is a validation failure rather than a no-op.
+     *
+     * @throws AuthenticationException
+     * @throws ValidationException
+     */
     public function createRelease(
         int $softwareAssetId,
         CreateSoftwareAssetReleaseData $data,

@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 return [
+    // Test environment: https://helpdesk-test.vme.co
     'url' => env('SERVICEDESKIFY_URL', 'https://helpdesk.vme.co'),
 
     'username' => env('SERVICEDESKIFY_USERNAME'),

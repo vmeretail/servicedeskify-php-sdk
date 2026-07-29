@@ -37,6 +37,9 @@ SERVICEDESKIFY_CLIENT_ID=
 SERVICEDESKIFY_CLIENT_SECRET=
 ```
 
+For the ServiceDeskify test environment, set
+`SERVICEDESKIFY_URL=https://helpdesk-test.vme.co`.
+
 The configured Laravel cache store is used by default. A different store may be
 selected with `SERVICEDESKIFY_CACHE_STORE`. Advanced token-cache settings are
 also configurable. The selected store must support Laravel atomic locks.
@@ -91,7 +94,17 @@ ServiceDeskify::incidents()->close(123);
 ```
 
 Paginated methods return `PaginatedData` with typed `items` and the usual page,
-total, link and range values.
+total, link and range values. A page can also be iterated directly or passed to
+`count()`.
+
+To process every incident without hand-rolling the service's fixed 50-item page
+loop, use `lazy()` or `each()`:
+
+```php
+foreach (ServiceDeskify::incidents()->lazy() as $incident) {
+    // Process one incident at a time.
+}
+```
 
 ## Replies and attachments
 
@@ -120,7 +133,7 @@ $download = ServiceDeskify::incidents()
     ->posts(123)
     ->download(postId: 456, attachmentId: 789);
 
-$download->saveTo(storage_path('app/helpdesk/'.$download->fileName));
+$download->saveTo(storage_path('app/'.$download->fileName));
 ```
 
 ## Locations, software assets and releases
@@ -156,6 +169,11 @@ ServiceDeskify::releases()->updateUrl(
     url: 'https://example.test/releases/4.2.0',
 );
 ```
+
+Software-asset lists return summary DTOs containing the ID, name and current
+release ID. `find()` returns the full software-asset DTO. Creating a release
+requires an agent account, and posting a version that already exists for that
+software asset results in a `ValidationException`.
 
 ## Errors
 

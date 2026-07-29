@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace VmeRetail\ServiceDeskify\Enums;
 
+/**
+ * v2 mapping: PRIORITY_CRITICAL => P1, PRIORITY_HIGH => P2,
+ * PRIORITY_MODERATE => P3 and PRIORITY_LOW => P4.
+ */
 enum IncidentPriority: int
 {
     case P1 = 1;

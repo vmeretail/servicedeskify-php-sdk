@@ -4,10 +4,17 @@ declare(strict_types=1);
 
 namespace VmeRetail\ServiceDeskify\Data;
 
+use ArrayIterator;
+use Countable;
+use IteratorAggregate;
+use Traversable;
+
 /**
  * @template TValue
+ *
+ * @implements IteratorAggregate<int, TValue>
  */
-final readonly class PaginatedData
+final readonly class PaginatedData implements Countable, IteratorAggregate
 {
     /**
      * @param  array<int, TValue>  $items
@@ -25,6 +32,19 @@ final readonly class PaginatedData
         public ?string $nextPageUrl,
         public ?string $previousPageUrl,
     ) {}
+
+    /**
+     * @return Traversable<int, TValue>
+     */
+    public function getIterator(): Traversable
+    {
+        return new ArrayIterator($this->items);
+    }
+
+    public function count(): int
+    {
+        return count($this->items);
+    }
 
     /**
      * @template TMapped
