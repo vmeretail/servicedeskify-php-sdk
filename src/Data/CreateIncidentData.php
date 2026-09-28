@@ -20,6 +20,7 @@ final readonly class CreateIncidentData
         public ?int $locationId = null,
         public IncidentPriority $priority = IncidentPriority::P3,
         public array $attachments = [],
+        public ?int $teamId = null,
     ) {}
 
     /**
@@ -33,6 +34,7 @@ final readonly class CreateIncidentData
             'store_number' => $this->storeNumber,
             'location' => $this->locationId,
             'priority' => $this->priority->value,
+            'team_id' => $this->teamId,
         ], static fn (mixed $value): bool => $value !== null);
     }
 }

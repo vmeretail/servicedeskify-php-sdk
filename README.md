@@ -67,8 +67,14 @@ $incident = ServiceDeskify::incidents()->create(new CreateIncidentData(
     details: 'Till 2 remains offline after a restart.',
     storeNumber: 722,
     priority: IncidentPriority::P1,
+    teamId: 2,
 ));
 ```
+
+`teamId` optionally routes to an existing Service Deskify team; omit it or pass
+`null` to retain Support routing. Invalid IDs raise a `ValidationException` with
+an `errors['team_id']` entry. Team routing requires the corresponding service
+API support. Omitting `priority` defaults to `IncidentPriority::P3` (Moderate).
 
 Incidents can be listed, retrieved, closed and given closure details:
 
@@ -112,16 +118,22 @@ foreach (ServiceDeskify::incidents()->lazy() as $incident) {
 ```php
 use Illuminate\Http\UploadedFile;
 use VmeRetail\ServiceDeskify\Data\CreateIncidentPostData;
+use VmeRetail\ServiceDeskify\Enums\PostType;
 
 $reply = ServiceDeskify::incidents()->posts(123)->create(
     new CreateIncidentPostData(
         details: 'The requested log is attached.',
+        type: PostType::Private,
         attachments: [
             new UploadedFile('/tmp/till.log', 'till.log'),
         ],
     ),
 );
 ```
+
+Private replies require an agent account and explicit `PostType::Private`;
+customer replies are always public. Opening incident details retain normal
+visibility.
 
 Attachments may be Laravel `UploadedFile` instances, `SplFileInfo` instances or
 readable filesystem paths. Requests without attachments are JSON; requests with

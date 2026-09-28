@@ -35,6 +35,7 @@ use VmeRetail\ServiceDeskify\Enums\PostType;
 use VmeRetail\ServiceDeskify\Enums\SortDirection;
 use VmeRetail\ServiceDeskify\Exceptions\ServiceDeskifyRequestException;
 use VmeRetail\ServiceDeskify\Exceptions\UnexpectedResponseException;
+use VmeRetail\ServiceDeskify\Exceptions\ValidationException;
 use VmeRetail\ServiceDeskify\Facades\ServiceDeskify;
 use VmeRetail\ServiceDeskify\Requests\IncidentPosts\CreateIncidentPostRequest;
 use VmeRetail\ServiceDeskify\Requests\IncidentPosts\DownloadIncidentAttachmentRequest;
@@ -460,22 +461,23 @@ it('accepts numeric string ids from laravel route and input values', function ()
     );
 });
 
-it('sends incident creation as json when it has no attachments', function (): void {
+it('sends incident creation as json with optional team routing', function (array $team, array $expectedTeam): void {
     $mock = MockClient::global([
         tokenResponse(),
         MockResponse::make(['data' => incidentPayload(80)], 201),
     ]);
 
-    $incident = ServiceDeskify::incidents()->create(new CreateIncidentData(
-        title: 'Till offline',
-        details: 'Till two cannot connect.',
-        storeNumber: 722,
-        priority: IncidentPriority::P1,
-    ));
+    $incident = ServiceDeskify::incidents()->create(new CreateIncidentData(...[
+        'title' => 'Till offline',
+        'details' => 'Till two cannot connect.',
+        'storeNumber' => 722,
+        'priority' => IncidentPriority::P1,
+        ...$team,
+    ]));
 
     expect($incident->id)->toBe(80);
 
-    $mock->assertSent(function ($request, Response $response): bool {
+    $mock->assertSent(function ($request, Response $response) use ($expectedTeam): bool {
         if (! $request instanceof CreateIncidentRequest) {
             return false;
         }
@@ -490,10 +492,15 @@ it('sends incident creation as json when it has no attachments', function (): vo
                 'details' => 'Till two cannot connect.',
                 'store_number' => 722,
                 'priority' => 1,
+                ...$expectedTeam,
             ];
     });
     assertApiRequestSent($mock, CreateIncidentRequest::class, Method::POST, '/api/incidents');
-});
+})->with([
+    'omitted team' => [[], []],
+    'explicit null team' => [['teamId' => null], []],
+    'selected team' => [['teamId' => 2], ['team_id' => 2]],
+]);
 
 it('switches incident creation to multipart when attachments are present', function (): void {
     $mock = MockClient::global([
@@ -508,6 +515,7 @@ it('switches incident creation to multipart when attachments are present', funct
         attachments: [
             UploadedFile::fake()->createWithContent('till.log', 'error details'),
         ],
+        teamId: 2,
     ));
 
     $mock->assertSent(function ($request, Response $response): bool {
@@ -536,9 +544,69 @@ it('switches incident creation to multipart when attachments are present', funct
         return collect($parts)->contains(
             static fn (MultipartValue $part): bool => $part->name === 'attachments[]'
                 && $part->filename === 'till.log',
+        ) && collect($parts)->contains(
+            static fn (MultipartValue $part): bool => $part->name === 'team_id' && $part->value === 2,
         );
     });
     assertApiRequestSent($mock, CreateIncidentRequest::class, Method::POST, '/api/incidents');
+});
+
+it('preserves the existing positional incident creation arguments', function (): void {
+    $attachments = [UploadedFile::fake()->createWithContent('till.log', 'error details')];
+    $data = new CreateIncidentData('Till offline', 'Details', 722, 123, IncidentPriority::P2, $attachments);
+
+    expect($data->attachments)->toBe($attachments)
+        ->and($data->payload())->toBe([
+            'title' => 'Till offline',
+            'details' => 'Details',
+            'store_number' => 722,
+            'location' => 123,
+            'priority' => 2,
+        ]);
+});
+
+it('surfaces invalid destination teams through the existing validation exception', function (): void {
+    $errors = ['team_id' => ['The selected team id is invalid.']];
+    MockClient::global([
+        tokenResponse(),
+        MockResponse::make(['message' => 'The given data was invalid.', 'errors' => $errors], 422),
+    ]);
+
+    try {
+        ServiceDeskify::incidents()->create(new CreateIncidentData('Monitor offline', 'Details', teamId: 99999));
+        test()->fail('A validation exception was not thrown.');
+    } catch (ValidationException $exception) {
+        expect($exception->status)->toBe(422)
+            ->and($exception->errors)->toBe($errors)
+            ->and($exception->responseBody)->toContain('team_id');
+    }
+});
+
+it('creates an explicitly private follow-up and returns a typed private post', function (): void {
+    $mock = MockClient::global([
+        tokenResponse(),
+        MockResponse::make(['data' => array_replace(postPayload(21), ['type' => 'private'])], 201),
+    ]);
+
+    $post = ServiceDeskify::incidents()->posts(10)->create(new CreateIncidentPostData(
+        details: 'The monitor incident has resolved.',
+        type: PostType::Private,
+    ));
+
+    expect($post)->toBeInstanceOf(IncidentPostData::class)
+        ->and($post->id)->toBe(21)
+        ->and($post->type)->toBe(PostType::Private);
+
+    assertApiRequestSent(
+        $mock,
+        CreateIncidentPostRequest::class,
+        Method::POST,
+        '/api/incidents/10/posts',
+        static fn (Request $request, Response $response): bool => $response->getPendingRequest()->body()?->all() === [
+            'details' => 'The monitor incident has resolved.',
+            'type' => 'private',
+        ],
+    );
 });
 
 it('rewinds multipart attachments before a request is retried', function (): void {
